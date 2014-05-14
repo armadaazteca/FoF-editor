@@ -15,4 +15,4 @@ Use Visual Studio 2013 to open project and build it.
 ### Linux
 =========
 Run './configure && make' as usual, there's no 'make install' yet, binary will be located at 'bin/release'.
-Alternatively you may use CMake. Go to 'cmake' subdir and run 'cmake ..' from terminal, binary will be located at 'cmake/release'.
+Alternatively you may use CMake. Run './configure' then go to 'cmake' subdir and run 'cmake ..' from terminal, binary will be located at 'cmake/release'.
