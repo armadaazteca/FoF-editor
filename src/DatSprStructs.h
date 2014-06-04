@@ -6,7 +6,7 @@ enum DatObjectCategory : unsigned char
 	CategoryItem = 0,
 	CategoryCreature,
 	CategoryEffect,
-	CategoryMissile,
+	CategoryProjectile,
 	InvalidCategory,
 	LastCategory = InvalidCategory
 };
@@ -100,9 +100,11 @@ struct DatObject
 
 struct Sprite
 {
-	static const unsigned short BUFFER_SIZE = 4096; // 1024 pixels * 4 bytes each (rgba)
+	// 1024 pixels, 3 bytes per rgb pixel, 1 byte for alpha channel
+	static const unsigned short RGB_SIZE = 3072, ALPHA_SIZE = 1024;
+	bool valid = false;
 	unsigned int id = 0, offset = 0;
-	unsigned char bitmap[BUFFER_SIZE];
+	unsigned char rgb[RGB_SIZE], alpha[ALPHA_SIZE];
 };
 
 #endif // _DAT_STRUCTS_H_

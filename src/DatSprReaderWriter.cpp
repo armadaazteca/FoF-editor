@@ -3,6 +3,7 @@
 #include <wx/wx.h>
 #include <wx/memory.h>
 #endif
+#include "Interfaces.h"
 #include "DatSprReaderWriter.h"
 
 DatSprReaderWriter & DatSprReaderWriter::getInstance()
@@ -11,7 +12,7 @@ DatSprReaderWriter & DatSprReaderWriter::getInstance()
 	return instance;
 }
 
-bool DatSprReaderWriter::readDat(const wxString & filename)
+bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
 	file.open(filename, ios::binary);
 	if (file.is_open())
@@ -21,6 +22,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename)
 		creaturesCount = readU16();
 		effectsCount = readU16();
 		projectilesCount = readU16();
+		unsigned int totalCount = itemsCount + creaturesCount + effectsCount + projectilesCount;
 
 		items = make_shared <DatObjectList> ();
 		items->reserve(itemsCount);
@@ -34,6 +36,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename)
 		unsigned short sizes[] = { itemsCount, creaturesCount, effectsCount, projectilesCount };
 		shared_ptr <DatObjectList> currentList = nullptr;
 
+		unsigned int readings = 100; // because '100' is first item id
 		shared_ptr <DatObject> object = nullptr;
 		unsigned short id = 0, size = 0;
 		int attr = 0;
@@ -203,7 +206,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename)
 
 				currentList->push_back(object);
 
-				wxLogDebug("Read object <%d>", object->id);
+				progressUpdatable->updateProgress(++readings / (double) totalCount);
 			}
 		}
 		file.close();
@@ -215,7 +218,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename)
 	return true;
 }
 
-bool DatSprReaderWriter::readSpr(const wxString & filename)
+bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
 	file.open(filename, ios::binary);
 	if (file.is_open())
@@ -232,9 +235,10 @@ bool DatSprReaderWriter::readSpr(const wxString & filename)
 			(*sprites)[id] = sprite;
 		}
 
-		// bc - buffer counter, bmp - bitmap pointer, trp - transparent pixels count, clp - colored pixels count
-		unsigned short pixelDataSize = 0, readPos = 0, writePos = 0, transparentPixels = 0, coloredPixels = 0;
-		unsigned char * bitmap = nullptr;
+		unsigned short pixelDataSize = 0, transparentPixels = 0, coloredPixels = 0;
+		unsigned short readPos = 0, writePosRgb = 0, writePosAlpha = 0;
+		unsigned char * bitmap = nullptr, * alpha = nullptr;
+		unsigned int readings = 0;
 		for (auto & kv : *sprites)
 		{
 			sprite = kv.second;
@@ -242,42 +246,49 @@ bool DatSprReaderWriter::readSpr(const wxString & filename)
 			{
 				file.seekg(sprite->offset  + 3); // +3 to skip transparent pixels color
 				pixelDataSize = readU16();
-				readPos = writePos = 0;
-				bitmap = sprite->bitmap;
+				if (pixelDataSize == 0) continue;
+				readPos = writePosRgb = writePosAlpha = 0;
+				bitmap = sprite->rgb;
+				alpha = sprite->alpha;
 				// decompress pixels
-				while (readPos < pixelDataSize && writePos < Sprite::BUFFER_SIZE)
+				while (readPos < pixelDataSize && writePosRgb < Sprite::RGB_SIZE)
 				{
 					transparentPixels = readU16();
 					coloredPixels = readU16();
-					for (unsigned short i = 0; i < transparentPixels && writePos < Sprite::BUFFER_SIZE; ++i)
+					for (unsigned short i = 0; i < transparentPixels && writePosRgb < Sprite::RGB_SIZE; ++i)
 					{
-						sprite->bitmap[writePos + 0] = 0x00;
-						bitmap[writePos + 1] = 0x00;
-						bitmap[writePos + 2] = 0x00;
-						bitmap[writePos + 3] = 0x00;
-						writePos += 4;
+						bitmap[writePosRgb + 0] = 0x00;
+						bitmap[writePosRgb + 1] = 0x00;
+						bitmap[writePosRgb + 2] = 0x00;
+						alpha[writePosAlpha] = 0x00;
+						writePosRgb += 3;
+						writePosAlpha++;
 					}
-					for (unsigned short i = 0; i < coloredPixels && writePos < Sprite::BUFFER_SIZE; ++i)
+					for (unsigned short i = 0; i < coloredPixels && writePosRgb < Sprite::RGB_SIZE; ++i)
 					{
-						bitmap[writePos + 0] = readByte();
-						bitmap[writePos + 1] = readByte();
-						bitmap[writePos + 2] = readByte();
-						bitmap[writePos + 3] = 0xFF;
-						writePos += 4;
+						bitmap[writePosRgb + 0] = readByte();
+						bitmap[writePosRgb + 1] = readByte();
+						bitmap[writePosRgb + 2] = readByte();
+						alpha[writePosAlpha] = 0xFF;
+						writePosRgb += 3;
+						writePosAlpha++;
 					}
 					readPos += 4 + (3 * coloredPixels);
 				}
 				// fill remaining pixels with alpha
-				while (writePos < Sprite::BUFFER_SIZE)
+				while (writePosRgb < Sprite::RGB_SIZE)
 				{
-					bitmap[writePos + 0] = 0x00;
-					bitmap[writePos + 1] = 0x00;
-					bitmap[writePos + 2] = 0x00;
-					bitmap[writePos + 3] = 0x00;
-					writePos += 4;
+					bitmap[writePosRgb + 0] = 0x00;
+					bitmap[writePosRgb + 1] = 0x00;
+					bitmap[writePosRgb + 2] = 0x00;
+					alpha[writePosAlpha] = 0x00;
+					writePosRgb += 3;
+					writePosAlpha++;
 				}
+				sprite->valid = true;
 			}
-			wxLogDebug("Read sprite <%d>", sprite->id);
+
+			progressUpdatable->updateProgress(++readings / (double) spritesCount);
 		}
 
 		file.close();
@@ -320,4 +331,17 @@ char * DatSprReaderWriter::readString()
 	file.read(buffer, len);
 	memcpy(result, buffer, len);
 	return result;
+}
+
+shared_ptr <DatSprReaderWriter::DatObjectList> DatSprReaderWriter::getObjects(DatObjectCategory category)
+{
+	switch (category)
+	{
+		case CategoryItem: return items; break;
+		case CategoryCreature: return creatures; break;
+		case CategoryEffect: return effects; break;
+		case CategoryProjectile: return projectiles; break;
+		default: return nullptr;
+	}
+	return nullptr;
 }

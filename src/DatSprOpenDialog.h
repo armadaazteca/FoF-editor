@@ -1,9 +1,16 @@
-class DatSprOpenDialog : public wxDialog
+#ifndef _DAT_SPR_OPEN_DIALOG_H_
+#define _DAT_SPR_OPEN_DIALOG_H_
+
+#include "Interfaces.h"
+
+class DatSprOpenDialog : public wxDialog, public ProgressUpdatable
 {
 public:
 	const static unsigned int WIDTH = 400;
 	const static unsigned int HEIGHT = 150;
 	DatSprOpenDialog(wxWindow * parent);
+	void updateProgress(double value);
+	virtual ~DatSprOpenDialog();
 private:
 	enum MenuItemIds
 	{
@@ -15,5 +22,11 @@ private:
 	void OnClickOpenButton(wxCommandEvent & event);
 	wxDECLARE_EVENT_TABLE();
 
-	wxTextCtrl * datPath, * sprPath;
+	wxTextCtrl * datPath = nullptr, * sprPath = nullptr;
+	wxGauge * progress = nullptr;
+
+	enum Loading { LOADING_DAT, LOADING_SPR };
+	Loading currentLoading = LOADING_DAT;
 };
+
+#endif // _DAT_SPR_OPEN_DIALOG_H_

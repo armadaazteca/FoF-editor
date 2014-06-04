@@ -1,3 +1,6 @@
+#ifndef _DAT_SPR_READER_WRITER_H_
+#define _DAT_SPR_READER_WRITER_H_
+
 #include <vector>
 #include <map>
 #include <memory>
@@ -14,8 +17,10 @@ public:
 	typedef vector <shared_ptr <DatObject>> DatObjectList;
 	typedef map <unsigned int, shared_ptr <Sprite>> SpriteMap;
 	static DatSprReaderWriter & getInstance();
-	bool readDat(const wxString & filename);
-	bool readSpr(const wxString & filename);
+	bool readDat(const wxString & filename, ProgressUpdatable * progressUpdatable);
+	bool readSpr(const wxString & filename, ProgressUpdatable * progressUpdatable);
+	shared_ptr <DatObjectList> getObjects(DatObjectCategory category);
+	inline shared_ptr <SpriteMap> getSprites() { return sprites; }
 private:
 	ifstream file;
 	char buffer[8192];
@@ -29,3 +34,5 @@ private:
 	unsigned int readU32();
 	char * readString();
 };
+
+#endif // _DAT_SPR_READER_WRITER_H_
