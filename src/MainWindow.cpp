@@ -18,6 +18,8 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_LOADED, MainWindow::OnDatSprLoaded)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
+	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnWidthOrHeightChanged)
+	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnWidthOrHeightChanged)
 wxEND_EVENT_TABLE()
 
 MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size) : wxFrame(NULL, wxID_ANY, title, pos, size)
@@ -39,82 +41,174 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	SetMenuBar(menuBar);
 
 	// constructing main window interface
-	auto panel = new wxPanel(this, -1);
+	mainPanel = new wxPanel(this, -1);
 	auto vbox = new wxBoxSizer(wxVERTICAL);
 	auto fgs = new wxFlexGridSizer(1, 3, 10, 10);
 
 	auto leftColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
-	categoryComboBox = new wxComboBox(panel, ID_CATEGORIES_COMBOBOX, CATEGORIES[0],
+	categoryComboBox = new wxComboBox(mainPanel, ID_CATEGORIES_COMBOBOX, CATEGORIES[0],
 			wxDefaultPosition, wxDefaultSize, 4, CATEGORIES, wxCB_READONLY);
 	leftColumnGrid->Add(categoryComboBox, 1, wxEXPAND);
-	objectsListBox = new wxListBox(panel, ID_OBJECTS_LISTBOX, wxDefaultPosition, wxSize(200, -1), 0, NULL, wxLB_SINGLE);
+	objectsListBox = new wxListBox(mainPanel, ID_OBJECTS_LISTBOX, wxDefaultPosition, wxSize(200, -1), 0, NULL, wxLB_SINGLE);
 	leftColumnGrid->Add(objectsListBox, 1, wxEXPAND);
 	leftColumnGrid->AddGrowableRow(1, 1);
 
 	auto midColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
-	auto attrBox = new wxStaticBox(panel, -1, "Attributes");
-	auto attrBoxSizer = new wxGridSizer(4, 5, 5);
+
+	// animation block
+	auto animationBoxSizer = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Animation");
+	animationBoxExpandSizer = new wxFlexGridSizer(1, 1, 0, 0);
+	animationBoxExpandSizer->AddGrowableRow(0, 1);
+	animationBoxExpandSizer->AddGrowableCol(0, 1);
+	animationPanel = new wxPanel(animationBoxSizer->GetStaticBox(), -1);
+	animationPanelSizer = new wxBoxSizer(wxVERTICAL);
+
+	wxImage arrowIconImage("res/icons/green_arrow_left.png", wxBITMAP_TYPE_PNG);
+	animationMainGridSizer = new wxFlexGridSizer(3, 3, 5, 5);
+
+	animationMainGridSizer->Add(32, 32);
+	auto dirTopButton = new wxButton(animationPanel, ID_DIR_TOP_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconImage = arrowIconImage.Rotate90();
+	wxBitmap dirTopButtonIcon(arrowIconImage);
+	dirTopButton->SetBitmap(dirTopButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirTopButton, 0, wxALIGN_CENTER);
+
+	animationMainGridSizer->Add(32, 32);
+	auto dirLeftButton = new wxButton(animationPanel, ID_DIR_LEFT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconImage = arrowIconImage.Rotate90(false);
+	wxBitmap dirLeftButtonIcon(arrowIconImage);
+	dirLeftButton->SetBitmap(dirLeftButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirLeftButton, 0, wxALIGN_CENTER);
+
+	animationMainGridSizer->Add(32, 32);
+	auto dirRightButton = new wxButton(animationPanel, ID_DIR_RIGHT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconImage = arrowIconImage.Rotate180();
+	wxBitmap dirRightButtonIcon(arrowIconImage);
+	dirRightButton->SetBitmap(dirRightButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirRightButton, 0, wxALIGN_CENTER);
+
+	animationMainGridSizer->Add(32, 32);
+	auto dirBottomButton = new wxButton(animationPanel, ID_DIR_BOTTOM_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconImage = arrowIconImage.Rotate90();
+	wxBitmap dirBottomButtonIcon(arrowIconImage);
+	dirBottomButton->SetBitmap(dirBottomButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirBottomButton, 0, wxALIGN_CENTER);
+	animationMainGridSizer->Add(32, 32);
+
+	animationWidth = animationHeight = 1;
+	buildAnimationSpriteHolders();
+	animationPanelSizer->Add(animationMainGridSizer, 0, wxALIGN_CENTER);
+
+	// frame control
+	auto frameNumberSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto currentFrameText = new wxStaticText(animationPanel, -1, "Current frame:");
+	frameNumberSizer->Add(currentFrameText, 0, wxALL, 10);
+	currentFrameNumber = new wxStaticText(animationPanel, -1, "0");
+	frameNumberSizer->Add(currentFrameNumber, 0, wxTOP | wxBOTTOM, 10);
+	animationPanelSizer->Add(frameNumberSizer, 0, wxALIGN_CENTER);
+
+	auto frameButtonsSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto prevFrameButton = new wxButton(animationPanel, ID_PREV_FRAME_BUTTON, "< previous");
+	frameButtonsSizer->Add(prevFrameButton, 0, wxTOP | wxRIGHT, 5);
+	auto nextFrameButton = new wxButton(animationPanel, ID_NEXT_FRAME_BUTTON, "next >");
+	frameButtonsSizer->Add(nextFrameButton, 0, wxTOP | wxLEFT, 5);
+	animationPanelSizer->Add(frameButtonsSizer, 0, wxALIGN_CENTER);
+
+	// width and height settings
+	animationPanelSizer->Add(0, 5); // a little spacer
+	auto widthAndHeightSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto widthLabel = new wxStaticText(animationPanel, -1, "Width:");
+	widthAndHeightSizer->Add(widthLabel, 0, wxALIGN_CENTER_VERTICAL);
+	animationWidthInput = new wxTextCtrl(animationPanel, ID_ANIM_WIDTH_INPUT, "1", wxDefaultPosition, wxSize(25, -1), wxTE_RIGHT);
+	widthAndHeightSizer->Add(animationWidthInput, 0, wxALL, 5);
+	auto heightLabel = new wxStaticText(animationPanel, -1, "Height:");
+	widthAndHeightSizer->Add(heightLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 10);
+	animationHeightInput = new wxTextCtrl(animationPanel, ID_ANIM_HEIGHT_INPUT, "1", wxDefaultPosition, wxSize(25, -1), wxTE_RIGHT);
+	widthAndHeightSizer->Add(animationHeightInput, 0, wxALL, 5);
+	animationPanelSizer->Add(widthAndHeightSizer, 0, wxALIGN_CENTER);
+
+	// amount of frames setting
+	auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto amountOfFramesLabel = new wxStaticText(animationPanel, -1, "Amount of frames:");
+	amountOfFramesSizer->Add(amountOfFramesLabel, 0, wxALIGN_CENTER_VERTICAL);
+	amountOfFramesInput = new wxTextCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition, wxSize(25, -1), wxTE_RIGHT);
+	amountOfFramesSizer->Add(amountOfFramesInput, 0, wxALL, 5);
+	animationPanelSizer->Add(amountOfFramesSizer, 0, wxALIGN_CENTER);
+
+	// always animated setting
+	alwaysAnimatedCheckbox = new wxCheckBox(animationPanel, ID_ALWAYS_ANIMATED_CHECKBOX, "Always animated");
+	animationPanelSizer->Add(alwaysAnimatedCheckbox, 0, wxALL | wxALIGN_CENTER, 5);
+
+	animationPanel->SetSizer(animationPanelSizer);
+	animationBoxExpandSizer->Add(animationPanel, 0, wxALIGN_CENTER);
+	animationBoxSizer->Add(animationBoxExpandSizer, 1, wxEXPAND);
+	midColumnGrid->Add(animationBoxSizer, 1, wxEXPAND);
 
 	// attributes
-	wxCheckBox * curCb = nullptr;
-	curCb = attrCheckboxes[ID_ATTR_IS_GROUND_BORDER] = new wxCheckBox(attrBox, ID_ATTR_IS_GROUND_BORDER, "Is ground border");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_ON_BOTTOM] = new wxCheckBox(attrBox, ID_ATTR_IS_ON_BOTTOM, "Is on bottom");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_ON_TOP] = new wxCheckBox(attrBox, ID_ATTR_IS_ON_TOP, "Is on top");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_CONTAINER] = new wxCheckBox(attrBox, ID_ATTR_IS_CONTAINER, "Is container");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_STACKABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_STACKABLE, "Is stackable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_FORCE_USE] = new wxCheckBox(attrBox, ID_ATTR_IS_FORCE_USE, "Force use");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_MULTI_USE] = new wxCheckBox(attrBox, ID_ATTR_IS_MULTI_USE, "Multi use");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_FLUID_CONTAINER] = new wxCheckBox(attrBox, ID_ATTR_IS_FLUID_CONTAINER, "Is fluid container");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_SPLASH] = new wxCheckBox(attrBox, ID_ATTR_IS_SPLASH, "Is splash");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES] = new wxCheckBox(attrBox, ID_ATTR_BLOCKS_PROJECTILES, "Blocks projectiles");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_PICKUPABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_PICKUPABLE, "Is pickupable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_WALKABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_WALKABLE, "Is walkable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_MOVABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_MOVABLE, "Is movable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_PATHABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_PATHABLE, "Is pathable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_CAN_BE_HIDDEN] = new wxCheckBox(attrBox, ID_ATTR_CAN_BE_HIDDEN, "Can be hidden");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_HANGABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_HANGABLE, "Is hangable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_HOOK_SOUTH] = new wxCheckBox(attrBox, ID_ATTR_IS_HOOK_SOUTH, "Hook south");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_HOOK_EAST] = new wxCheckBox(attrBox, ID_ATTR_IS_HOOK_EAST, "Hook east");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_ROTATABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_ROTATABLE, "Is rotatable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_TRANSLUCENT] = new wxCheckBox(attrBox, ID_ATTR_IS_TRANSLUCENT, "Is translucent");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_LYING_CORPSE] = new wxCheckBox(attrBox, ID_ATTR_IS_LYING_CORPSE, "Is lying corpse");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_FULL_GROUND] = new wxCheckBox(attrBox, ID_ATTR_IS_FULL_GROUND, "Is full ground");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IGNORE_LOOK] = new wxCheckBox(attrBox, ID_ATTR_IGNORE_LOOK, "Ignore look");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
-	curCb = attrCheckboxes[ID_ATTR_IS_USABLE] = new wxCheckBox(attrBox, ID_ATTR_IS_USABLE, "Is usable");
-	attrBoxSizer->Add(curCb, 0, wxALL, 5);
+	auto attrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Attributes");
+	auto attrsPanel = new wxPanel(mainPanel, -1);
+	auto attrsPanelSizer = new wxGridSizer(4, 0, 0);
 
-	attrBox->SetSizer(attrBoxSizer);
-	midColumnGrid->Add(attrBox, 1, wxEXPAND);
+	wxCheckBox * curCb = nullptr;
+	curCb = attrCheckboxes[ID_ATTR_IS_GROUND_BORDER] = new wxCheckBox(attrsPanel, ID_ATTR_IS_GROUND_BORDER, "Is ground border");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_ON_BOTTOM] = new wxCheckBox(attrsPanel, ID_ATTR_IS_ON_BOTTOM, "Is on bottom");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_ON_TOP] = new wxCheckBox(attrsPanel, ID_ATTR_IS_ON_TOP, "Is on top");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_CONTAINER] = new wxCheckBox(attrsPanel, ID_ATTR_IS_CONTAINER, "Is container");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_STACKABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_STACKABLE, "Is stackable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_FORCE_USE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_FORCE_USE, "Force use");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_MULTI_USE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_MULTI_USE, "Multi use");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_FLUID_CONTAINER] = new wxCheckBox(attrsPanel, ID_ATTR_IS_FLUID_CONTAINER, "Is fluid container");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_SPLASH] = new wxCheckBox(attrsPanel, ID_ATTR_IS_SPLASH, "Is splash");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES] = new wxCheckBox(attrsPanel, ID_ATTR_BLOCKS_PROJECTILES, "Blocks projectiles");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_PICKUPABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_PICKUPABLE, "Is pickupable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_WALKABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_WALKABLE, "Is walkable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_MOVABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_MOVABLE, "Is movable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_PATHABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_PATHABLE, "Is pathable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_CAN_BE_HIDDEN] = new wxCheckBox(attrsPanel, ID_ATTR_CAN_BE_HIDDEN, "Can be hidden");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_HANGABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_HANGABLE, "Is hangable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_HOOK_SOUTH] = new wxCheckBox(attrsPanel, ID_ATTR_IS_HOOK_SOUTH, "Hook south");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_HOOK_EAST] = new wxCheckBox(attrsPanel, ID_ATTR_IS_HOOK_EAST, "Hook east");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_ROTATABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_ROTATABLE, "Is rotatable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_TRANSLUCENT] = new wxCheckBox(attrsPanel, ID_ATTR_IS_TRANSLUCENT, "Is translucent");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_LYING_CORPSE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_LYING_CORPSE, "Is lying corpse");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_FULL_GROUND] = new wxCheckBox(attrsPanel, ID_ATTR_IS_FULL_GROUND, "Is full ground");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IGNORE_LOOK] = new wxCheckBox(attrsPanel, ID_ATTR_IGNORE_LOOK, "Ignore look");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = attrCheckboxes[ID_ATTR_IS_USABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_USABLE, "Is usable");
+	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+
+	attrsPanel->SetSizer(attrsPanelSizer);
+	attrsBox->Add(attrsPanel, 1, wxEXPAND);
+	midColumnGrid->Add(attrsBox, 1, wxEXPAND);
 	midColumnGrid->AddGrowableRow(0, 1);
 	midColumnGrid->AddGrowableCol(0, 1);
 
 	auto rightColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
 
-	auto spritesBoxSizer = new wxStaticBoxSizer(wxVERTICAL, panel, "Sprites");
-	spritesPanel = new wxScrolledWindow(panel, -1, wxDefaultPosition, wxSize(200, -1));
+	auto spritesBoxSizer = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Sprites");
+	spritesPanel = new wxScrolledWindow(mainPanel, -1, wxDefaultPosition, wxSize(200, -1));
 	spritesBoxSizer->Add(spritesPanel, 1, wxEXPAND);
 	spritesPanelSizer = new wxFlexGridSizer(2, 5, 5);
 	spritesPanelSizer->AddGrowableCol(1, 1);
@@ -132,7 +226,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	fgs->AddGrowableCol(1, 1);
 
 	vbox->Add(fgs, 1, wxALL | wxEXPAND, 10);
-	panel->SetSizer(vbox);
+	mainPanel->SetSizer(vbox);
 }
 
 void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
@@ -349,6 +443,43 @@ void MainWindow::fillObjectSprites(shared_ptr <DatObject> object)
 
 	spritesPanelSizer->Layout();
 	spritesPanel->FitInside();
+}
+
+void MainWindow::buildAnimationSpriteHolders()
+{
+	animationMainGridSizer->Remove(4);
+	if (animationSpritesPanel)
+	{
+		animationSpritesPanel->DestroyChildren();
+		animationSpritesPanel->Destroy();
+	}
+	animationSpritesPanel = new wxPanel(animationPanel, -1);
+	animationSpritesSizer = new wxGridSizer(animationHeight, animationWidth, 0, 0);
+
+	wxBitmap spriteHolderBitmap;
+	spriteHolderBitmap.LoadFile("res/misc/sprite_placeholder.png", wxBITMAP_TYPE_PNG);
+	wxGenericStaticBitmap * spriteHolder = nullptr;
+	for (unsigned int i = 0; i < animationWidth * animationHeight; ++i)
+	{
+		spriteHolder = new wxGenericStaticBitmap(animationSpritesPanel, -1, spriteHolderBitmap);
+		animationSpritesSizer->Add(spriteHolder);
+	}
+
+	animationSpritesPanel->SetSizer(animationSpritesSizer, true);
+	animationMainGridSizer->Insert(4, animationSpritesPanel);
+	animationBoxExpandSizer->Layout();
+	//animationMainGridSizer->Layout();
+	//animationPanel->Fit();
+}
+
+void MainWindow::OnWidthOrHeightChanged(wxCommandEvent & event)
+{
+	if (animationWidthInput && animationHeightInput)
+	{
+		animationWidth = wxAtoi(animationWidthInput->GetValue());
+		animationHeight = wxAtoi(animationHeightInput->GetValue());
+		buildAnimationSpriteHolders();
+	}
 }
 
 void MainWindow::OnExit(wxCommandEvent & event)

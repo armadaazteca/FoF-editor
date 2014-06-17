@@ -16,7 +16,17 @@ private:
 	enum ControlIds
 	{
 		ID_CATEGORIES_COMBOBOX = 1,
-		ID_OBJECTS_LISTBOX
+		ID_OBJECTS_LISTBOX,
+		ID_DIR_LEFT_BUTTON,
+		ID_DIR_TOP_BUTTON,
+		ID_DIR_RIGHT_BUTTON,
+		ID_DIR_BOTTOM_BUTTON,
+		ID_PREV_FRAME_BUTTON,
+		ID_NEXT_FRAME_BUTTON,
+		ID_ANIM_WIDTH_INPUT,
+		ID_ANIM_HEIGHT_INPUT,
+		ID_FRAMES_AMOUNT_INPUT,
+		ID_ALWAYS_ANIMATED_CHECKBOX
 	};
 	enum AttrCheckboxIds
 	{
@@ -31,6 +41,7 @@ private:
 		// hasDisplacement, isRaised, isMinimap, isLensHelp, isCloth, isMarketable
 	};
 
+	wxPanel * mainPanel = nullptr;
 	wxComboBox * categoryComboBox = nullptr;
 	wxListBox * objectsListBox = nullptr;
 	wxCheckBox * attrCheckboxes[ID_ATTR_LAST];
@@ -39,15 +50,27 @@ private:
 	wxScrolledWindow * spritesPanel = nullptr;
 	wxFlexGridSizer * spritesPanelSizer = nullptr;
 
+	wxPanel * animationPanel = nullptr, * animationSpritesPanel = nullptr;
+	wxFlexGridSizer * animationBoxExpandSizer = nullptr, * animationMainGridSizer = nullptr;
+	wxBoxSizer * animationPanelSizer = nullptr;
+	wxGridSizer * animationSpritesSizer = nullptr;
+	wxStaticText * currentFrameNumber = nullptr;
+	unsigned int animationWidth = 1, animationHeight = 1;
+	wxTextCtrl * animationWidthInput = nullptr, * animationHeightInput = nullptr;
+	wxTextCtrl * amountOfFramesInput = nullptr;
+	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
+
 	void OnOpenDatSprDialog(wxCommandEvent & event);
 	void OnDatSprLoaded(wxCommandEvent & event);
 	void OnObjectCategoryChanged(wxCommandEvent & event);
 	void OnObjectSelected(wxCommandEvent & event);
+	void OnWidthOrHeightChanged(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();
 	void setAttributeValues(shared_ptr <DatObject> object);
 	void fillObjectSprites(shared_ptr <DatObject> object);
+	void buildAnimationSpriteHolders();
 
 	wxDECLARE_EVENT_TABLE();
 };
