@@ -1,8 +1,6 @@
 #include <wx/wxprec.h>
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
-#include <wx/gbsizer.h>
-#include <wx/generic/statbmpg.h>
 #endif
 #include "Events.h"
 #include "MainWindow.h"
@@ -20,6 +18,12 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
 	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnWidthOrHeightChanged)
 	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnWidthOrHeightChanged)
+	EVT_BUTTON(ID_DIR_TOP_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_BOTTOM_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_PREV_FRAME_BUTTON, MainWindow::OnClickPrevFrameButton)
+	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
 wxEND_EVENT_TABLE()
 
 MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size) : wxFrame(NULL, wxID_ANY, title, pos, size)
@@ -94,15 +98,16 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	dirBottomButton->SetBitmap(dirBottomButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirBottomButton, 0, wxALIGN_CENTER);
 	animationMainGridSizer->Add(32, 32);
-
-	animationWidth = animationHeight = 1;
-	buildAnimationSpriteHolders();
 	animationPanelSizer->Add(animationMainGridSizer, 0, wxALIGN_CENTER);
+
+	animationSpritesPanel = nullptr; // initializing
+	animationSpritesSizer = nullptr; // to prevent warnings
 
 	// frame control
 	auto frameNumberSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto currentFrameText = new wxStaticText(animationPanel, -1, "Current frame:");
 	frameNumberSizer->Add(currentFrameText, 0, wxALL, 10);
+	currentFrame = 0;
 	currentFrameNumber = new wxStaticText(animationPanel, -1, "0");
 	frameNumberSizer->Add(currentFrameNumber, 0, wxTOP | wxBOTTOM, 10);
 	animationPanelSizer->Add(frameNumberSizer, 0, wxALIGN_CENTER);
@@ -227,6 +232,9 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	vbox->Add(fgs, 1, wxALL | wxEXPAND, 10);
 	mainPanel->SetSizer(vbox);
+
+	// variables
+	currentXDiv = currentYDiv = 0;
 }
 
 void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
@@ -240,8 +248,10 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 	currentCategory = CategoryItem;
 	fillObjectsListBox();
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
-	setAttributeValues(objects->at(0));
-	fillObjectSprites(objects->at(0));
+	selectedObject = objects->at(0);
+	setAttributeValues();
+	fillObjectSprites();
+	fillAnimationSection();
 }
 
 void MainWindow::OnObjectCategoryChanged(wxCommandEvent & event)
@@ -265,8 +275,10 @@ void MainWindow::OnObjectCategoryChanged(wxCommandEvent & event)
 	}
 	fillObjectsListBox();
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
-	setAttributeValues(objects->at(0));
-	fillObjectSprites(objects->at(0));
+	selectedObject = objects->at(0);
+	setAttributeValues();
+	fillObjectSprites();
+	fillAnimationSection();
 }
 
 void MainWindow::fillObjectsListBox()
@@ -295,13 +307,13 @@ void MainWindow::OnObjectSelected(wxCommandEvent & event)
 	{
 		objectId -= 1;
 	}
-	shared_ptr <DatObject> object = objects->at(objectId);
-
-	setAttributeValues(object);
-	fillObjectSprites(object);
+	selectedObject = objects->at(objectId);
+	setAttributeValues();
+	fillObjectSprites();
+	fillAnimationSection();
 }
 
-void MainWindow::setAttributeValues(shared_ptr <DatObject> object)
+void MainWindow::setAttributeValues()
 {
 	// at first, resetting attributes to default
 	for (int i = ID_ATTR_IS_GROUND_BORDER; i < ID_ATTR_LAST; ++i)
@@ -309,101 +321,101 @@ void MainWindow::setAttributeValues(shared_ptr <DatObject> object)
 		attrCheckboxes[i]->SetValue(false);
 	}
 	// then setting values
-	if (object->isGroundBorder)
+	if (selectedObject->isGroundBorder)
 	{
 		attrCheckboxes[ID_ATTR_IS_GROUND_BORDER]->SetValue(true);
 	}
-	if (object->isOnTop)
+	if (selectedObject->isOnTop)
 	{
 		attrCheckboxes[ID_ATTR_IS_ON_TOP]->SetValue(true);
 	}
-	if (object->isContainer)
+	if (selectedObject->isContainer)
 	{
 		attrCheckboxes[ID_ATTR_IS_CONTAINER]->SetValue(true);
 	}
-	if (object->isStackable)
+	if (selectedObject->isStackable)
 	{
 		attrCheckboxes[ID_ATTR_IS_STACKABLE]->SetValue(true);
 	}
-	if (object->isForceUse)
+	if (selectedObject->isForceUse)
 	{
 		attrCheckboxes[ID_ATTR_IS_FORCE_USE]->SetValue(true);
 	}
-	if (object->isMultiUse)
+	if (selectedObject->isMultiUse)
 	{
 		attrCheckboxes[ID_ATTR_IS_MULTI_USE]->SetValue(true);
 	}
-	if (object->isFluidContainer)
+	if (selectedObject->isFluidContainer)
 	{
 		attrCheckboxes[ID_ATTR_IS_FLUID_CONTAINER]->SetValue(true);
 	}
-	if (object->isSplash)
+	if (selectedObject->isSplash)
 	{
 		attrCheckboxes[ID_ATTR_IS_SPLASH]->SetValue(true);
 	}
-	if (object->blocksProjectiles)
+	if (selectedObject->blocksProjectiles)
 	{
 		attrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES]->SetValue(true);
 	}
-	if (object->isPickupable)
+	if (selectedObject->isPickupable)
 	{
 		attrCheckboxes[ID_ATTR_IS_PICKUPABLE]->SetValue(true);
 	}
-	if (object->isWalkable)
+	if (selectedObject->isWalkable)
 	{
 		attrCheckboxes[ID_ATTR_IS_WALKABLE]->SetValue(true);
 	}
-	if (object->isMovable)
+	if (selectedObject->isMovable)
 	{
 		attrCheckboxes[ID_ATTR_IS_MOVABLE]->SetValue(true);
 	}
-	if (object->isPathable)
+	if (selectedObject->isPathable)
 	{
 		attrCheckboxes[ID_ATTR_IS_PATHABLE]->SetValue(true);
 	}
-	if (object->canBeHidden)
+	if (selectedObject->canBeHidden)
 	{
 		attrCheckboxes[ID_ATTR_CAN_BE_HIDDEN]->SetValue(true);
 	}
-	if (object->isHangable)
+	if (selectedObject->isHangable)
 	{
 		attrCheckboxes[ID_ATTR_IS_HANGABLE]->SetValue(true);
 	}
-	if (object->isHookSouth)
+	if (selectedObject->isHookSouth)
 	{
 		attrCheckboxes[ID_ATTR_IS_HOOK_SOUTH]->SetValue(true);
 	}
-	if (object->isHookEast)
+	if (selectedObject->isHookEast)
 	{
 		attrCheckboxes[ID_ATTR_IS_HOOK_EAST]->SetValue(true);
 	}
-	if (object->isRotatable)
+	if (selectedObject->isRotatable)
 	{
 		attrCheckboxes[ID_ATTR_IS_ROTATABLE]->SetValue(true);
 	}
-	if (object->isTranslucent)
+	if (selectedObject->isTranslucent)
 	{
 		attrCheckboxes[ID_ATTR_IS_TRANSLUCENT]->SetValue(true);
 	}
-	if (object->isLyingCorpse)
+	if (selectedObject->isLyingCorpse)
 	{
 		attrCheckboxes[ID_ATTR_IS_LYING_CORPSE]->SetValue(true);
 	}
-	if (object->isFullGround)
+	if (selectedObject->isFullGround)
 	{
 		attrCheckboxes[ID_ATTR_IS_FULL_GROUND]->SetValue(true);
 	}
-	if (object->ignoreLook)
+	if (selectedObject->ignoreLook)
 	{
 		attrCheckboxes[ID_ATTR_IGNORE_LOOK]->SetValue(true);
 	}
-	if (object->isUsable)
+	if (selectedObject->isUsable)
 	{
 		attrCheckboxes[ID_ATTR_IS_USABLE]->SetValue(true);
 	}
 }
 
-void MainWindow::fillObjectSprites(shared_ptr <DatObject> object)
+void MainWindow::fillObjectSprites()
 {
 	spritesPanelSizer->Clear(true);
 
@@ -416,9 +428,9 @@ void MainWindow::fillObjectSprites(shared_ptr <DatObject> object)
 
 	bool hasAtLeastOneSprite = false;
 	unsigned int spriteId = 0;
-	for (unsigned int i = 0; i < object->spriteCount; ++i)
+	for (unsigned int i = 0; i < selectedObject->spriteCount; ++i)
 	{
-		spriteId = object->spriteIDs[i];
+		spriteId = selectedObject->spriteIDs[i];
 		if (sprites->find(spriteId) != sprites->end())
 		{
 			sprite = sprites->at(spriteId);
@@ -437,12 +449,26 @@ void MainWindow::fillObjectSprites(shared_ptr <DatObject> object)
 
 	if (!hasAtLeastOneSprite)
 	{
-		auto empty = new wxStaticText(spritesPanel, -1, "This object has no sprites");
+		auto empty = new wxStaticText(spritesPanel, -1, "This selectedObject has no sprites");
 		spritesPanelSizer->Add(empty, 0, wxALL, 5);
 	}
 
 	spritesPanelSizer->Layout();
 	spritesPanel->FitInside();
+}
+
+void MainWindow::fillAnimationSection()
+{
+	animationWidthInput->SetValue(wxString::Format("%i", selectedObject->width));
+	animationHeightInput->SetValue(wxString::Format("%i", selectedObject->height));
+
+	currentFrame = 0;
+	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+	amountOfFramesInput->SetValue(wxString::Format("%i", selectedObject->phasesCount));
+
+	alwaysAnimatedCheckbox->SetValue(selectedObject->isAlwaysAnimated);
+
+	fillAnimationSprites();
 }
 
 void MainWindow::buildAnimationSpriteHolders()
@@ -454,32 +480,91 @@ void MainWindow::buildAnimationSpriteHolders()
 		animationSpritesPanel->Destroy();
 	}
 	animationSpritesPanel = new wxPanel(animationPanel, -1);
-	animationSpritesSizer = new wxGridSizer(animationHeight, animationWidth, 0, 0);
+	animationSpritesSizer = new wxGridSizer(selectedObject->height, selectedObject->width, 0, 0);
 
-	wxBitmap spriteHolderBitmap;
-	spriteHolderBitmap.LoadFile("res/misc/sprite_placeholder.png", wxBITMAP_TYPE_PNG);
-	wxGenericStaticBitmap * spriteHolder = nullptr;
-	for (unsigned int i = 0; i < animationWidth * animationHeight; ++i)
+	wxBitmap spriteBitmap;
+	spriteBitmap.LoadFile("res/misc/sprite_placeholder.png", wxBITMAP_TYPE_PNG);
+	for (unsigned int i = 0; i < selectedObject->width * selectedObject->height; ++i)
 	{
-		spriteHolder = new wxGenericStaticBitmap(animationSpritesPanel, -1, spriteHolderBitmap);
-		animationSpritesSizer->Add(spriteHolder);
+		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, spriteBitmap);
+		animationSpritesSizer->Add(animationSpriteBitmaps[i]);
 	}
 
 	animationSpritesPanel->SetSizer(animationSpritesSizer, true);
 	animationMainGridSizer->Insert(4, animationSpritesPanel);
 	animationBoxExpandSizer->Layout();
-	//animationMainGridSizer->Layout();
-	//animationPanel->Fit();
+}
+
+void MainWindow::fillAnimationSprites()
+{
+	auto sprites = DatSprReaderWriter::getInstance().getSprites();
+	shared_ptr <Sprite> sprite = nullptr;
+	unsigned int spriteId = 0;
+
+	unsigned int startSprite = currentXDiv + currentFrame * selectedObject->patternWidth;
+	unsigned int endSprite = startSprite + selectedObject->width * selectedObject->height;
+	for (unsigned int i = startSprite, j = 0; i < endSprite; ++i, ++j)
+	{
+		spriteId = selectedObject->spriteIDs[i];
+		if (sprites->find(spriteId) != sprites->end())
+		{
+			sprite = sprites->at(spriteId);
+			if (sprite->valid)
+			{
+				wxImage image(32, 32, sprite->rgb, sprite->alpha, true);
+				wxBitmap bitmap(image);
+				animationSpriteBitmaps[j]->SetBitmap(bitmap);
+			}
+		}
+	}
 }
 
 void MainWindow::OnWidthOrHeightChanged(wxCommandEvent & event)
 {
 	if (animationWidthInput && animationHeightInput)
 	{
-		animationWidth = wxAtoi(animationWidthInput->GetValue());
-		animationHeight = wxAtoi(animationHeightInput->GetValue());
+		selectedObject->width = wxAtoi(animationWidthInput->GetValue());
+		selectedObject->height = wxAtoi(animationHeightInput->GetValue());
 		buildAnimationSpriteHolders();
 	}
+}
+
+void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
+{
+	unsigned int xDiv = 0;
+	switch (event.GetId())
+	{
+		case ID_DIR_TOP_BUTTON: xDiv = ORIENT_NORTH; break;
+		case ID_DIR_RIGHT_BUTTON: xDiv = ORIENT_EAST; break;
+		case ID_DIR_BOTTOM_BUTTON: xDiv = ORIENT_SOUTH; break;
+		case ID_DIR_LEFT_BUTTON: xDiv = ORIENT_WEST; break;
+	}
+	if (xDiv < selectedObject->patternWidth)
+	{
+		currentXDiv = xDiv;
+	}
+
+	// resetting frame when switching orientation
+	currentFrame = 0;
+	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+
+	fillAnimationSprites();
+}
+
+void MainWindow::OnClickPrevFrameButton(wxCommandEvent & event)
+{
+	if (currentFrame == 0) currentFrame = selectedObject->phasesCount - 1;
+	else currentFrame--;
+	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+	fillAnimationSprites();
+}
+
+void MainWindow::OnClickNextFrameButton(wxCommandEvent & event)
+{
+	currentFrame++;
+	if (currentFrame >= selectedObject->phasesCount) currentFrame = 0;
+	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+	fillAnimationSprites();
 }
 
 void MainWindow::OnExit(wxCommandEvent & event)

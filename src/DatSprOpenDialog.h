@@ -6,7 +6,7 @@
 class DatSprOpenDialog : public wxDialog, public ProgressUpdatable
 {
 public:
-	const static unsigned int WIDTH = 400;
+	const static unsigned int WIDTH = 500;
 	const static unsigned int HEIGHT = 150;
 	DatSprOpenDialog(wxWindow * parent);
 	void updateProgress(double value);

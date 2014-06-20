@@ -2,6 +2,7 @@
 #define _MAIN_WINDOW_H_
 
 #include <memory>
+#include <wx/generic/statbmpg.h>
 #include "DatSprStructs.h"
 
 using namespace std;
@@ -40,6 +41,15 @@ private:
 		// TODO: ID_ATTR_IS_GROUND, ID_ATTR_IS_WRITABLE, ID_ATTR_IS_WRITABLE_ONCE, isAlwaysAnimated, isLightSource,
 		// hasDisplacement, isRaised, isMinimap, isLensHelp, isCloth, isMarketable
 	};
+	enum OrientationToXDiv
+	{
+		ORIENT_NORTH = 0,
+		ORIENT_EAST = 1,
+		ORIENT_SOUTH = 2,
+		ORIENT_WEST = 3
+	};
+
+	shared_ptr <DatObject> selectedObject = nullptr;
 
 	wxPanel * mainPanel = nullptr;
 	wxComboBox * categoryComboBox = nullptr;
@@ -54,22 +64,28 @@ private:
 	wxFlexGridSizer * animationBoxExpandSizer = nullptr, * animationMainGridSizer = nullptr;
 	wxBoxSizer * animationPanelSizer = nullptr;
 	wxGridSizer * animationSpritesSizer = nullptr;
+	wxGenericStaticBitmap * animationSpriteBitmaps[64];
 	wxStaticText * currentFrameNumber = nullptr;
-	unsigned int animationWidth = 1, animationHeight = 1;
 	wxTextCtrl * animationWidthInput = nullptr, * animationHeightInput = nullptr;
 	wxTextCtrl * amountOfFramesInput = nullptr;
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
+	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0;
 
 	void OnOpenDatSprDialog(wxCommandEvent & event);
 	void OnDatSprLoaded(wxCommandEvent & event);
 	void OnObjectCategoryChanged(wxCommandEvent & event);
 	void OnObjectSelected(wxCommandEvent & event);
 	void OnWidthOrHeightChanged(wxCommandEvent & event);
+	void OnClickOrientationButton(wxCommandEvent & event);
+	void OnClickPrevFrameButton(wxCommandEvent & event);
+	void OnClickNextFrameButton(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();
-	void setAttributeValues(shared_ptr <DatObject> object);
-	void fillObjectSprites(shared_ptr <DatObject> object);
+	void setAttributeValues();
+	void fillObjectSprites();
+	void fillAnimationSection();
+	void fillAnimationSprites();
 	void buildAnimationSpriteHolders();
 
 	wxDECLARE_EVENT_TABLE();

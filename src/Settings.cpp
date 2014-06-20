@@ -10,7 +10,7 @@ Settings & Settings::getInstance()
 	if (!instance.loaded)
 	{
 		wxString fullPath = wxGetCwd() + "/" + FILENAME;
-		ifstream file(fullPath);
+		ifstream file(fullPath.mb_str());
 		if (file.is_open())
 		{
 			string line, key, value;
@@ -41,7 +41,7 @@ const wxString & Settings::get(const wxString & key)
 
 void Settings::save()
 {
-	ofstream file(wxGetCwd() + "/" + FILENAME, ios::out | ios::trunc);
+	ofstream file((wxGetCwd() + "/" + FILENAME).mb_str(), ios::out | ios::trunc);
 	if (file.is_open())
 	{
 		for (auto const & kv : settings)

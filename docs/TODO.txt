@@ -1,0 +1,5 @@
+- animation section (direction, frame switch)
+- animtion width & height validator
+- create new objects
+- import sprites (including big sprites)
+- saving files (don't forget to save alpha channel of sprites)

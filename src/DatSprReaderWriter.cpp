@@ -14,7 +14,7 @@ DatSprReaderWriter & DatSprReaderWriter::getInstance()
 
 bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename, ios::binary);
+	file.open(filename.mb_str(), ios::binary);
 	if (file.is_open())
 	{
 		datSignature = readU32();
@@ -220,7 +220,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 
 bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename, ios::binary);
+	file.open(filename.mb_str(), ios::binary);
 	if (file.is_open())
 	{
 		sprSignature = readU32();

@@ -1,9 +1,9 @@
 #include <wx/wxprec.h>
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
-#include <wx/gbsizer.h>
-#include <wx/filename.h>
 #endif
+#include <wx/filename.h>
+#include <wx/gbsizer.h>
 #include "Settings.h"
 #include "Events.h"
 #include "DatSprOpenDialog.h"
