@@ -75,7 +75,8 @@ private:
 	void OnDatSprLoaded(wxCommandEvent & event);
 	void OnObjectCategoryChanged(wxCommandEvent & event);
 	void OnObjectSelected(wxCommandEvent & event);
-	void OnWidthOrHeightChanged(wxCommandEvent & event);
+	void OnAnimWidthChanged(wxCommandEvent & event);
+	void OnAnimHeightChanged(wxCommandEvent & event);
 	void OnClickOrientationButton(wxCommandEvent & event);
 	void OnClickPrevFrameButton(wxCommandEvent & event);
 	void OnClickNextFrameButton(wxCommandEvent & event);

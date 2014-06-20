@@ -16,8 +16,8 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_LOADED, MainWindow::OnDatSprLoaded)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
-	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnWidthOrHeightChanged)
-	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnWidthOrHeightChanged)
+	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
+	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnAnimHeightChanged)
 	EVT_BUTTON(ID_DIR_TOP_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_BOTTOM_BUTTON, MainWindow::OnClickOrientationButton)
@@ -519,11 +519,19 @@ void MainWindow::fillAnimationSprites()
 	}
 }
 
-void MainWindow::OnWidthOrHeightChanged(wxCommandEvent & event)
+void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
 {
-	if (animationWidthInput && animationHeightInput)
+	if (animationWidthInput)
 	{
 		selectedObject->width = wxAtoi(animationWidthInput->GetValue());
+		buildAnimationSpriteHolders();
+	}
+}
+
+void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
+{
+	if (animationHeightInput)
+	{
 		selectedObject->height = wxAtoi(animationHeightInput->GetValue());
 		buildAnimationSpriteHolders();
 	}
