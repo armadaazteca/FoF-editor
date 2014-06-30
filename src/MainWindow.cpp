@@ -2,7 +2,10 @@
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
 #endif
+#include <wx/filename.h>
+#include <wx/notebook.h>
 #include "Events.h"
+#include "Settings.h"
 #include "MainWindow.h"
 #include "DatSprOpenDialog.h"
 #include "DatSprReaderWriter.h"
@@ -24,6 +27,9 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_BUTTON(ID_DIR_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_PREV_FRAME_BUTTON, MainWindow::OnClickPrevFrameButton)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
+	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
+	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
+	EVT_LEFT_DOWN(MainWindow::OnClickImportedSprite)
 wxEND_EVENT_TABLE()
 
 MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size) : wxFrame(NULL, wxID_ANY, title, pos, size)
@@ -49,13 +55,15 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto vbox = new wxBoxSizer(wxVERTICAL);
 	auto fgs = new wxFlexGridSizer(1, 3, 10, 10);
 
-	auto leftColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
+	auto leftColumnGrid = new wxFlexGridSizer(3, 1, 5, 5);
 	categoryComboBox = new wxComboBox(mainPanel, ID_CATEGORIES_COMBOBOX, CATEGORIES[0],
 			wxDefaultPosition, wxDefaultSize, 4, CATEGORIES, wxCB_READONLY);
 	leftColumnGrid->Add(categoryComboBox, 1, wxEXPAND);
-	objectsListBox = new wxListBox(mainPanel, ID_OBJECTS_LISTBOX, wxDefaultPosition, wxSize(200, -1), 0, NULL, wxLB_SINGLE);
+	objectsListBox = new wxListBox(mainPanel, ID_OBJECTS_LISTBOX, wxDefaultPosition, wxSize(220, -1), 0, NULL, wxLB_SINGLE);
 	leftColumnGrid->Add(objectsListBox, 1, wxEXPAND);
 	leftColumnGrid->AddGrowableRow(1, 1);
+	auto newObjectButton = new wxButton(mainPanel, ID_NEW_OBJECT_BUTTON, "New object");
+	leftColumnGrid->Add(newObjectButton, 1, wxEXPAND);
 
 	auto midColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
 
@@ -102,6 +110,15 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	animationSpritesPanel = nullptr; // initializing
 	animationSpritesSizer = nullptr; // to prevent warnings
+	spritePlaceholderBitmap = new wxBitmap();
+	spritePlaceholderBitmap->LoadFile("res/misc/sprite_placeholder.png", wxBITMAP_TYPE_PNG);
+	auto bitmap = new unsigned char[3072];
+	auto alpha = new unsigned char[1024];
+	for (int i = 0, j = 0; i < 1024; ++i, j += 3)
+	{
+		bitmap[j] = bitmap[j + 1] = bitmap[j + 2] = alpha[i] = 0;
+	}
+	stubImage = new wxImage(32, 32, bitmap, alpha);
 
 	// frame control
 	auto frameNumberSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -210,17 +227,35 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	midColumnGrid->AddGrowableRow(0, 1);
 	midColumnGrid->AddGrowableCol(0, 1);
 
-	auto rightColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
+	auto rightColumnGrid = new wxFlexGridSizer(1, 1, 5, 5);
 
-	auto spritesBoxSizer = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Sprites");
-	spritesPanel = new wxScrolledWindow(mainPanel, -1, wxDefaultPosition, wxSize(200, -1));
-	spritesBoxSizer->Add(spritesPanel, 1, wxEXPAND);
-	spritesPanelSizer = new wxFlexGridSizer(2, 5, 5);
-	spritesPanelSizer->AddGrowableCol(1, 1);
-	spritesPanel->SetSizer(spritesPanelSizer);
-	spritesPanel->SetScrollRate(0, 20);
+	auto spriteTabs = new wxNotebook(mainPanel, -1);
+	objectSpritesPanel = new wxScrolledWindow(spriteTabs, -1, wxDefaultPosition, wxSize(220, -1));
+	spriteTabs->AddPage(objectSpritesPanel, "Object sprites", true);
+	objectSpritesPanelSizer = new wxFlexGridSizer(2, 5, 5);
+	objectSpritesPanelSizer->AddGrowableCol(1, 1);
+	objectSpritesPanel->SetSizer(objectSpritesPanelSizer);
+	objectSpritesPanel->SetScrollRate(0, 20);
 
-	rightColumnGrid->Add(spritesBoxSizer, 1, wxEXPAND);
+	auto newSpritesOuterPanel = new wxPanel(spriteTabs, -1);
+	auto newSpritesOuterSizer = new wxFlexGridSizer(2, 1, 5, 5);
+	newSpritesOuterPanel->SetSizer(newSpritesOuterSizer);
+	spriteTabs->AddPage(newSpritesOuterPanel, "New sprites");
+
+	newSpritesPanel = new wxScrolledWindow(newSpritesOuterPanel, -1, wxDefaultPosition, wxSize(220, -1));
+	newSpritesPanelSizer = new wxFlexGridSizer(2, 5, 5);
+	newSpritesPanelSizer->AddGrowableCol(1, 1);
+	newSpritesPanel->SetSizer(newSpritesPanelSizer);
+	newSpritesPanel->SetScrollRate(0, 20);
+	newSpritesOuterSizer->Add(newSpritesPanel, 1, wxEXPAND);
+
+	auto importSpritesButton = new wxButton(newSpritesOuterPanel, ID_IMPORT_SPRITES_BUTTON, "Import sprites");
+	newSpritesOuterSizer->Add(importSpritesButton, 1, wxEXPAND);
+
+	newSpritesOuterSizer->AddGrowableRow(0, 1);
+	newSpritesOuterSizer->AddGrowableCol(0, 1);
+
+	rightColumnGrid->Add(spriteTabs, 1, wxEXPAND);
 	rightColumnGrid->AddGrowableRow(0, 1);
 	rightColumnGrid->AddGrowableCol(0, 1);
 
@@ -417,7 +452,7 @@ void MainWindow::setAttributeValues()
 
 void MainWindow::fillObjectSprites()
 {
-	spritesPanelSizer->Clear(true);
+	objectSpritesPanelSizer->Clear(true);
 
 	auto sprites = DatSprReaderWriter::getInstance().getSprites();
 	shared_ptr <Sprite> sprite = nullptr;
@@ -439,22 +474,22 @@ void MainWindow::fillObjectSprites()
 				hasAtLeastOneSprite = true;
 				image = new wxImage(32, 32, sprite->rgb, sprite->alpha, true);
 				bitmap = new wxBitmap(*image);
-				staticBitmap = new wxGenericStaticBitmap(spritesPanel, -1, *bitmap);
-				spritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
-				spriteIdLabel = new wxStaticText(spritesPanel, -1, wxString::Format("%i", spriteId));
-				spritesPanelSizer->Add(spriteIdLabel, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, -1, *bitmap);
+				objectSpritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
+				spriteIdLabel = new wxStaticText(objectSpritesPanel, -1, wxString::Format("%i", spriteId));
+				objectSpritesPanelSizer->Add(spriteIdLabel, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 			}
 		}
 	}
 
 	if (!hasAtLeastOneSprite)
 	{
-		auto empty = new wxStaticText(spritesPanel, -1, "This selectedObject has no sprites");
-		spritesPanelSizer->Add(empty, 0, wxALL, 5);
+		auto empty = new wxStaticText(objectSpritesPanel, -1, "This object has no sprites");
+		objectSpritesPanelSizer->Add(empty, 0, wxALL, 5);
 	}
 
-	spritesPanelSizer->Layout();
-	spritesPanel->FitInside();
+	objectSpritesPanelSizer->Layout();
+	objectSpritesPanel->FitInside();
 }
 
 void MainWindow::fillAnimationSection()
@@ -462,7 +497,7 @@ void MainWindow::fillAnimationSection()
 	animationWidthInput->SetValue(wxString::Format("%i", selectedObject->width));
 	animationHeightInput->SetValue(wxString::Format("%i", selectedObject->height));
 
-	currentFrame = 0;
+	currentFrame = currentXDiv = currentYDiv = 0;
 	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
 	amountOfFramesInput->SetValue(wxString::Format("%i", selectedObject->phasesCount));
 
@@ -482,12 +517,29 @@ void MainWindow::buildAnimationSpriteHolders()
 	animationSpritesPanel = new wxPanel(animationPanel, -1);
 	animationSpritesSizer = new wxGridSizer(selectedObject->height, selectedObject->width, 0, 0);
 
-	wxBitmap spriteBitmap;
-	spriteBitmap.LoadFile("res/misc/sprite_placeholder.png", wxBITMAP_TYPE_PNG);
 	for (unsigned int i = 0; i < selectedObject->width * selectedObject->height; ++i)
 	{
-		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, spriteBitmap);
+		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, *spritePlaceholderBitmap);
 		animationSpritesSizer->Add(animationSpriteBitmaps[i]);
+
+		// for sprites drag & drop
+		auto dropTarget = new AnimationSpriteDropTarget();
+		dropTarget->setMainWindow(this);
+		dropTarget->setSpriteHolderIndex(i);
+		animationSpriteBitmaps[i]->SetDropTarget(dropTarget);
+
+		auto onEnter = [=](wxMouseEvent & event)
+		{
+			wxGenericStaticBitmap * sBmp = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
+			drawAnimationSpriteSelection(sBmp);
+		};
+		auto onLeave = [=](wxMouseEvent & event)
+		{
+			wxGenericStaticBitmap * sBmp = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
+			clearAnimationSpriteSelection(sBmp);
+		};
+		animationSpriteBitmaps[i]->Bind(wxEVT_ENTER_WINDOW, onEnter);
+		animationSpriteBitmaps[i]->Bind(wxEVT_LEAVE_WINDOW, onLeave);
 	}
 
 	animationSpritesPanel->SetSizer(animationSpritesSizer, true);
@@ -501,19 +553,51 @@ void MainWindow::fillAnimationSprites()
 	shared_ptr <Sprite> sprite = nullptr;
 	unsigned int spriteId = 0;
 
-	unsigned int startSprite = currentXDiv + currentFrame * selectedObject->patternWidth;
-	unsigned int endSprite = startSprite + selectedObject->width * selectedObject->height;
-	for (unsigned int i = startSprite, j = 0; i < endSprite; ++i, ++j)
+	int frameSize = selectedObject->width * selectedObject->height;
+	for (int layer = 0; layer < selectedObject->layersCount; ++layer)
 	{
-		spriteId = selectedObject->spriteIDs[i];
-		if (sprites->find(spriteId) != sprites->end())
+		int startSprite = (currentXDiv + currentFrame * selectedObject->patternWidth + layer) * frameSize;
+		int endSprite = startSprite + frameSize;
+		for (int i = endSprite - 1, j = 0; i >= startSprite; --i, ++j)
 		{
-			sprite = sprites->at(spriteId);
-			if (sprite->valid)
+			spriteId = selectedObject->spriteIDs[i];
+			if (spriteId != 0 && sprites->find(spriteId) != sprites->end())
 			{
-				wxImage image(32, 32, sprite->rgb, sprite->alpha, true);
-				wxBitmap bitmap(image);
-				animationSpriteBitmaps[j]->SetBitmap(bitmap);
+				sprite = sprites->at(spriteId);
+				if (sprite->valid)
+				{
+					if (layer == 0) // filling bottom layer
+					{
+						wxImage image(32, 32, sprite->rgb, sprite->alpha, true);
+						wxBitmap bitmap(image);
+						animationSpriteBitmaps[j]->SetBitmap(bitmap);
+					}
+					else
+					{
+						auto oldImageMemDC = new wxMemoryDC();
+						oldImageMemDC->SelectObjectAsSource(animationSpriteBitmaps[j]->GetBitmap());
+						wxImage newImage(32, 32, sprite->rgb, sprite->alpha, true);
+						wxBitmap newBitmap(newImage);
+						oldImageMemDC->DrawBitmap(newBitmap, 0, 0, true);
+						delete oldImageMemDC;
+					}
+				}
+				else
+				{
+					if (layer == 0) // filling bottom layer
+					{
+						wxBitmap emptyBitmap(*stubImage);
+						animationSpriteBitmaps[j]->SetBitmap(emptyBitmap);
+					}
+				}
+			}
+			else
+			{
+				if (layer == 0) // filling bottom layer
+				{
+					wxBitmap emptyBitmap(*stubImage);
+					animationSpriteBitmaps[j]->SetBitmap(emptyBitmap);
+				}
 			}
 		}
 	}
@@ -575,6 +659,103 @@ void MainWindow::OnClickNextFrameButton(wxCommandEvent & event)
 	fillAnimationSprites();
 }
 
+void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
+{
+	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
+	auto newObject = make_shared <DatObject> ();
+	newObject->id = objects->size() + 1;
+	newObject->width = newObject->height = 1;
+	objects->push_back(newObject);
+	selectedObject = newObject;
+	objectsListBox->Insert(wxString::Format("%i", newObject->id), objectsListBox->GetCount());
+	objectsListBox->SetSelection(objectsListBox->GetCount() - 1);
+
+	setAttributeValues();
+	fillObjectSprites();
+	fillAnimationSection();
+}
+
+void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
+{
+	Settings & settings = Settings::getInstance();
+	const wxString & spriteImportPath = settings.get("lastSpriteImportPath");
+	wxFileDialog * browseDialog = new wxFileDialog(this, wxFileSelectorPromptStr, spriteImportPath, "", "", wxFD_MULTIPLE);
+	if (browseDialog->ShowModal() == wxID_OK)
+	{
+		wxArrayString paths;
+		browseDialog->GetPaths(paths);
+		// saving directory path for future usage
+		settings.set("lastSpriteImportPath", wxFileName(paths[0]).GetPath());
+		settings.save();
+
+		shared_ptr <wxBitmap> bitmap = nullptr;
+		wxGenericStaticBitmap * staticBitmap = nullptr;
+		wxStaticText * spriteLabel = nullptr;
+		wxFileName filename;
+		unsigned int bitmapId = 0;
+		for (auto const & p : paths)
+		{
+			bitmapId = importedSprites.size();
+			bitmap = make_shared <wxBitmap> ();
+			bitmap->LoadFile(p, wxBITMAP_TYPE_PNG);
+			importedSprites.push_back(bitmap);
+			staticBitmap = new wxGenericStaticBitmap(newSpritesPanel, -1, *bitmap);
+
+			// writing bitmap index (id) into object client data
+			char * buf = new char[10];
+			sprintf(buf, "%d", bitmapId);
+			staticBitmap->SetClientData(buf);
+
+			staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedSprite, this);
+
+			newSpritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
+			filename.Assign(p);
+			spriteLabel = new wxStaticText(newSpritesPanel, -1, filename.GetName());
+			newSpritesPanelSizer->Add(spriteLabel, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+		}
+		newSpritesPanelSizer->Layout();
+		newSpritesPanel->FitInside();
+	}
+}
+
+void MainWindow::OnClickImportedSprite(wxMouseEvent & event)
+{
+	auto staticBitmap = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
+	char * buf = (char *) staticBitmap->GetClientData();
+	wxTextDataObject data(buf);
+	wxDropSource dragSource(staticBitmap);
+	dragSource.SetData(data);
+	dragSource.DoDragDrop(true);
+}
+
+void MainWindow::drawAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap)
+{
+	auto currentBitmap = new wxBitmap(staticBitmap->GetBitmap().GetSubBitmap(wxRect(0, 0, 32, 32)));
+	staticBitmap->SetClientData(currentBitmap);
+	wxBitmap tmpBmp(32, 32);
+	wxMemoryDC tmpDC;
+	tmpDC.SelectObject(tmpBmp);
+	tmpDC.Clear();
+	tmpDC.SetBrush(*wxTRANSPARENT_BRUSH);
+	tmpDC.DrawBitmap(*currentBitmap, 0, 0);
+	tmpDC.SetPen(*wxBLACK_PEN);
+	tmpDC.DrawRectangle(0, 0, 32, 32);
+	tmpDC.SetPen(*wxWHITE_PEN);
+	tmpDC.DrawRectangle(1, 1, 30, 30);
+	tmpDC.SelectObject(wxNullBitmap);
+	staticBitmap->SetBitmap(tmpBmp);
+}
+
+void MainWindow::clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap)
+{
+	if (staticBitmap->GetClientData())
+	{
+		auto bmp = (wxBitmap *) staticBitmap->GetClientData();
+		staticBitmap->SetBitmap(*bmp);
+		delete bmp;
+	}
+}
+
 void MainWindow::OnExit(wxCommandEvent & event)
 {
 	Close(true);
@@ -583,4 +764,28 @@ void MainWindow::OnExit(wxCommandEvent & event)
 void MainWindow::OnAbout(wxCommandEvent & event)
 {
 	wxMessageBox("Here will be some about text", "About", wxOK | wxICON_INFORMATION);
+}
+
+bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, const wxString & data)
+{
+	int spriteId = wxAtoi(data);
+	auto importedSprites = mainWindow->getImportedSprites();
+	auto bitmap = importedSprites[spriteId];
+	auto staticBitmap = mainWindow->getAnimationSpriteBitmaps()[getSpriteHolderIndex()];
+	staticBitmap->SetBitmap(*bitmap);
+	staticBitmap->SetClientData(nullptr);
+	return true;
+}
+
+wxDragResult MainWindow::AnimationSpriteDropTarget::OnEnter(wxCoord x, wxCoord y, wxDragResult defResult)
+{
+	auto sBmp = mainWindow->getAnimationSpriteBitmaps()[getSpriteHolderIndex()];
+	mainWindow->drawAnimationSpriteSelection(sBmp);
+	return defResult;
+}
+
+void MainWindow::AnimationSpriteDropTarget::OnLeave()
+{
+	auto sBmp = mainWindow->getAnimationSpriteBitmaps()[getSpriteHolderIndex()];
+	mainWindow->clearAnimationSpriteSelection(sBmp);
 }

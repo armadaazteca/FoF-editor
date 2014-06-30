@@ -2,7 +2,9 @@
 #define _MAIN_WINDOW_H_
 
 #include <memory>
+#include <vector>
 #include <wx/generic/statbmpg.h>
+#include <wx/dnd.h>
 #include "DatSprStructs.h"
 
 using namespace std;
@@ -11,6 +13,25 @@ class MainWindow : public wxFrame
 {
 public:
 	MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size);
+
+	class AnimationSpriteDropTarget : public wxTextDropTarget
+	{
+	public:
+
+		virtual bool OnDropText(wxCoord x, wxCoord y, const wxString & data);
+		virtual wxDragResult OnEnter(wxCoord x, wxCoord y, wxDragResult defResult);
+		virtual void OnLeave();
+		inline unsigned int getSpriteHolderIndex() { return spriteHolderIndex; }
+		inline void setSpriteHolderIndex(unsigned int index) { spriteHolderIndex = index; }
+		inline void setMainWindow(MainWindow * mainWindow) { this->mainWindow = mainWindow; };
+		inline virtual ~AnimationSpriteDropTarget() {}
+	private:
+		MainWindow * mainWindow = nullptr;
+		unsigned int spriteHolderIndex = 0;
+	};
+
+	inline std::vector <shared_ptr <wxBitmap>> getImportedSprites() { return importedSprites; }
+	inline wxGenericStaticBitmap ** getAnimationSpriteBitmaps() { return animationSpriteBitmaps; }
 
 private:
 	static const wxString CATEGORIES[];
@@ -27,7 +48,10 @@ private:
 		ID_ANIM_WIDTH_INPUT,
 		ID_ANIM_HEIGHT_INPUT,
 		ID_FRAMES_AMOUNT_INPUT,
-		ID_ALWAYS_ANIMATED_CHECKBOX
+		ID_ALWAYS_ANIMATED_CHECKBOX,
+		ID_NEW_OBJECT_BUTTON,
+		ID_IMPORT_SPRITES_BUTTON,
+		ID_IMPORTED_SPRITE
 	};
 	enum AttrCheckboxIds
 	{
@@ -57,8 +81,8 @@ private:
 	wxCheckBox * attrCheckboxes[ID_ATTR_LAST];
 	DatObjectCategory currentCategory = CategoryItem;
 
-	wxScrolledWindow * spritesPanel = nullptr;
-	wxFlexGridSizer * spritesPanelSizer = nullptr;
+	wxScrolledWindow * objectSpritesPanel = nullptr, * newSpritesPanel = nullptr;
+	wxFlexGridSizer * objectSpritesPanelSizer = nullptr, * newSpritesPanelSizer = nullptr;
 
 	wxPanel * animationPanel = nullptr, * animationSpritesPanel = nullptr;
 	wxFlexGridSizer * animationBoxExpandSizer = nullptr, * animationMainGridSizer = nullptr;
@@ -70,6 +94,10 @@ private:
 	wxTextCtrl * amountOfFramesInput = nullptr;
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
 	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0;
+	wxImage * stubImage = nullptr;
+	wxBitmap * spritePlaceholderBitmap = nullptr;
+
+	std::vector <shared_ptr <wxBitmap>> importedSprites;
 
 	void OnOpenDatSprDialog(wxCommandEvent & event);
 	void OnDatSprLoaded(wxCommandEvent & event);
@@ -80,6 +108,9 @@ private:
 	void OnClickOrientationButton(wxCommandEvent & event);
 	void OnClickPrevFrameButton(wxCommandEvent & event);
 	void OnClickNextFrameButton(wxCommandEvent & event);
+	void OnClickNewObjectButton(wxCommandEvent & event);
+	void OnClickImportSpriteButton(wxCommandEvent & event);
+	void OnClickImportedSprite(wxMouseEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();
@@ -88,6 +119,8 @@ private:
 	void fillAnimationSection();
 	void fillAnimationSprites();
 	void buildAnimationSpriteHolders();
+	void drawAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
+	void clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
 
 	wxDECLARE_EVENT_TABLE();
 };

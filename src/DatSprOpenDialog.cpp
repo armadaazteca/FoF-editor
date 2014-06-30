@@ -35,6 +35,7 @@ DatSprOpenDialog::DatSprOpenDialog(wxWindow * parent) : wxDialog(parent, -1, wxT
 	auto sprButton = new wxButton(panel, ID_BROWSE_SPR_BUTTON, wxT("Browse..."));
 	progress = new wxGauge(panel, -1, 100);
 	auto openButton = new wxButton(panel, ID_OPEN, wxT("Open"));
+	openButton->SetFocus();
 
 	gbs->Add(datLabel, wxGBPosition(0, 0), wxDefaultSpan, wxALIGN_CENTER);
 	gbs->Add(datPath, wxGBPosition(0, 1), wxDefaultSpan, wxEXPAND);
