@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\DatSprOpenDialog.h">
+    <ClInclude Include="src\DatSprOpenSaveDialog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\MainWindow.h">
@@ -44,7 +44,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\DatSprOpenDialog.cpp">
+    <ClCompile Include="src\DatSprOpenSaveDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\MainWindow.cpp">

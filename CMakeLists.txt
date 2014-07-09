@@ -8,9 +8,9 @@ if (NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
  
-set(HEADERS src/NewEditor.h src/MainWindow.h src/Settings.h src/DatSprOpenDialog.h src/DatSprStructs.h src/DatSprReaderWriter.h)
+set(HEADERS src/NewEditor.h src/MainWindow.h src/Settings.h src/DatSprOpenSaveDialog.h src/DatSprStructs.h src/DatSprReaderWriter.h)
 
-set(SOURCES src/NewEditor.cpp src/MainWindow.cpp src/Settings.cpp src/DatSprOpenDialog.cpp src/DatSprReaderWriter.cpp)
+set(SOURCES src/NewEditor.cpp src/MainWindow.cpp src/Settings.cpp src/DatSprOpenSaveDialog.cpp src/DatSprReaderWriter.cpp)
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated-declarations -std=c++11")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -D__DEBUG__")

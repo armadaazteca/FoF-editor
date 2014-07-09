@@ -86,15 +86,14 @@ struct DatObject
 	unsigned short minimapColor = 0;
 	unsigned short clothSlot = 0;
 	unsigned short lensHelp = 0;
-	unsigned char otherAttrs[255];
-	unsigned int otherAttrsCount = 0;
+	bool allAttrs[255];
 
 	// sprite data
 	unsigned char width = 0, height = 0, exactSize = 0;
 	unsigned char patternWidth = 0, patternHeight = 0, patternDepth = 0;
 	unsigned char layersCount, phasesCount = 0;
 	unsigned int spriteCount = 0;
-	unsigned short * spriteIDs = nullptr;
+	unsigned int * spriteIDs = nullptr;
 	~DatObject() { delete[] spriteIDs; }
 };
 

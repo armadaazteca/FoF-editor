@@ -12,9 +12,20 @@ DatSprReaderWriter & DatSprReaderWriter::getInstance()
 	return instance;
 }
 
+void DatSprReaderWriter::initNewData()
+{
+	datSignature = DEFAULT_DAT_SIGNATURE;
+	items = make_shared <DatObjectList> ();
+	creatures = make_shared <DatObjectList> ();
+	effects = make_shared <DatObjectList> ();
+	projectiles = make_shared <DatObjectList> ();
+	sprites = make_shared <SpriteMap> ();
+	hasData = true;
+}
+
 bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename.mb_str(), ios::binary);
+	file.open(filename.mb_str(), ios::in | ios::binary);
 	if (file.is_open())
 	{
 		datSignature = readU32();
@@ -47,6 +58,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 			for (id = category == CategoryItem ? 100 : 1; id <= size; id++)
 			{
 				object = make_shared <DatObject> ();
+				memset(object->allAttrs, 0, AttrLast);
 				object->id = id;
 				do
 				{
@@ -177,10 +189,8 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 						break;
 						case AttrLast:
 						break;
-						default:
-							object->otherAttrs[object->otherAttrsCount++] = attr;
-						break;
 					}
+					if (attr < AttrLast) object->allAttrs[attr] = true;
 				}
 				while (attr != AttrLast);
 
@@ -198,8 +208,8 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 				object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
 				                    * object->patternHeight * object->patternDepth * object->phasesCount;
 
-				object->spriteIDs = new unsigned short[object->spriteCount];
-				for (unsigned short i = 0; i < object->spriteCount; ++i)
+				object->spriteIDs = new unsigned int[object->spriteCount];
+				for (unsigned int i = 0; i < object->spriteCount; ++i)
 				{
 					object->spriteIDs[i] = readU32();
 				}
@@ -220,20 +230,22 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 
 bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename.mb_str(), ios::binary);
+	file.open(filename.mb_str(), ios::in | ios::binary);
 	if (file.is_open())
 	{
 		sprSignature = readU32();
 		unsigned int spritesCount = readU32();
 		sprites = make_shared <SpriteMap> ();
 		shared_ptr <Sprite> sprite = nullptr;
-		for (unsigned int id = 1; id <= spritesCount; ++id)
+		unsigned int id = 1;
+		for (; id <= spritesCount; ++id)
 		{
 			sprite = make_shared <Sprite> ();
 			sprite->id = id;
 			sprite->offset = readU32();
 			(*sprites)[id] = sprite;
 		}
+		maxSpriteId = id;
 
 		unsigned short pixelDataSize = 0, transparentPixels = 0, coloredPixels = 0;
 		unsigned short readPos = 0, writePosRgb = 0, writePosAlpha = 0;
@@ -297,40 +309,163 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 	{
 		return false;
 	}
+	hasData = true;
 	return true;
 }
 
 unsigned char DatSprReaderWriter::readByte()
 {
-	file.read(buffer, 1);
-	return (unsigned char) buffer[0];
+	unsigned char result = 0;
+	file.read((char *) &result, 1);
+	return result;
 }
 
 unsigned short DatSprReaderWriter::readU16()
 {
 	unsigned short result = 0;
-	file.read(buffer, 2);
-	memcpy(&result, buffer, 2);
+	file.read((char *) &result, 2);
 	return result;
 }
 
 unsigned int DatSprReaderWriter::readU32()
 {
 	unsigned int result = 0;
-	file.read(buffer, 4);
-	memcpy(&result, buffer, 4);
+	file.read((char *) &result, 4);
 	return result;
 }
 
 char * DatSprReaderWriter::readString()
 {
 	unsigned short len = 0;
-	file.read(buffer, 2);
-	memcpy(&len, buffer, 2);
-	char * result = new char[len];
-	file.read(buffer, len);
-	memcpy(result, buffer, len);
+	file.read((char *) &len, 2);
+	char * result = new char[len + 1];
+	file.read(result, len);
+	result[len] = 0; // null-terminating
 	return result;
+}
+
+bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable * progressUpdatable)
+{
+	file.open(filename.mb_str(), ios::out | ios::binary | ios::trunc);
+	if (file.is_open())
+	{
+		writeU32(datSignature);
+		writeU16(items->size() + 100);
+		writeU16(creatures->size());
+		writeU16(effects->size());
+		writeU16(projectiles->size());
+		unsigned int totalCount = items->size() + creatures->size() + effects->size() + projectiles->size();
+
+		shared_ptr <DatObjectList> lists[] = { items, creatures, effects, projectiles };
+		shared_ptr <DatObjectList> currentList = nullptr;
+		unsigned int writings = 0;
+
+		for (int category = CategoryItem; category < LastCategory; category++)
+		{
+			currentList = lists[category];
+			for (auto & object : *currentList)
+			{
+				for (int attr = 0; attr < AttrLast; ++attr)
+				{
+					if (object->allAttrs[attr])
+					{
+						writeByte(attr);
+						switch (attr)
+						{
+							case AttrGround:
+								writeU16(object->speed);
+							break;
+							case AttrWritable:
+							case AttrWritableOnce:
+								writeU16(object->charsToWrite);
+							break;
+							case AttrLight:
+								writeU16(object->lightIntensity);
+								writeU16(object->lightColor);
+							break;
+							case AttrDisplacement:
+								writeU16(object->displacementX);
+								writeU16(object->displacementY);
+							break;
+							case AttrElevation:
+								writeU16(object->elevation);
+							break;
+							case AttrMinimapColor:
+								writeU16(object->minimapColor);
+							break;
+							case AttrLensHelp:
+								writeU16(object->lensHelp);
+							break;
+							case AttrCloth:
+								writeU16(object->clothSlot);
+							break;
+							case AttrMarket:
+								writeU16(object->marketCategory);
+								writeU16(object->marketTradeAs);
+								writeU16(object->marketShowAs);
+								writeString(object->marketName);
+								writeU16(object->marketRestrictVocation);
+								writeU16(object->marketRequiredLevel);
+							break;
+						}
+					}
+				}
+
+				writeByte(object->width);
+				writeByte(object->height);
+				if (object->width > 1 || object->height > 1)
+				{
+					writeByte(object->exactSize);
+				}
+				writeByte(object->layersCount);
+				writeByte(object->patternWidth);
+				writeByte(object->patternHeight);
+				writeByte(object->patternDepth);
+				writeByte(object->phasesCount);
+				for (unsigned int i = 0; i < object->spriteCount; ++i)
+				{
+					writeU32(object->spriteIDs[i]);
+				}
+
+				progressUpdatable->updateProgress(++writings / (double) totalCount);
+			}
+		}
+
+		file.close();
+	}
+	return true;
+}
+
+bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable * progressUpdatable)
+{
+	if (file.is_open())
+	{
+
+		file.close();
+	}
+	return true;
+}
+
+void DatSprReaderWriter::writeByte(unsigned char byte)
+{
+	file.write((char *) &byte, 1);
+}
+
+void DatSprReaderWriter::writeU16(unsigned short u16)
+{
+	file.write((char *) &u16, 2);
+}
+
+void DatSprReaderWriter::writeU32(unsigned int u32)
+{
+	file.write((char *) &u32, 4);
+}
+
+void DatSprReaderWriter::writeString(char * str)
+{
+	unsigned short len = strlen(str);
+	writeU16(len);
+	file.write(str, len);
 }
 
 shared_ptr <DatSprReaderWriter::DatObjectList> DatSprReaderWriter::getObjects(DatObjectCategory category)

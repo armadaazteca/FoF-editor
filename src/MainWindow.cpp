@@ -4,17 +4,22 @@
 #endif
 #include <wx/filename.h>
 #include <wx/notebook.h>
+#include <wx/rawbmp.h>
 #include "Events.h"
 #include "Settings.h"
 #include "MainWindow.h"
-#include "DatSprOpenDialog.h"
+#include "DatSprOpenSaveDialog.h"
 #include "DatSprReaderWriter.h"
 
+const wxString MainWindow::DIRECTION_QUESTION = "This object doesn't have \"%s\" direction yet, create it?";
+const wxString MainWindow::DIRECTION_QUESTION_TITLE = "Create direction?";
 const wxString MainWindow::CATEGORIES[] = { "Items", "Creatures", "Effects", "Projectiles" };
 
 wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
-	EVT_MENU(wxID_OPEN,  MainWindow::OnOpenDatSprDialog)
-	EVT_MENU(wxID_EXIT,  MainWindow::OnExit)
+	EVT_MENU(wxID_NEW, MainWindow::OnCreateNewFiles)
+	EVT_MENU(wxID_OPEN, MainWindow::OnOpenDatSprDialog)
+	EVT_MENU(wxID_SAVE, MainWindow::OnOpenDatSprDialog)
+	EVT_MENU(wxID_EXIT, MainWindow::OnExit)
 	EVT_MENU(wxID_ABOUT, MainWindow::OnAbout)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_LOADED, MainWindow::OnDatSprLoaded)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
@@ -29,7 +34,6 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
 	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
-	EVT_LEFT_DOWN(MainWindow::OnClickImportedSprite)
 wxEND_EVENT_TABLE()
 
 MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size) : wxFrame(NULL, wxID_ANY, title, pos, size)
@@ -40,7 +44,9 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	// constructing main menu
 	wxMenu * menuFile = new wxMenu();
+	menuFile->Append(wxID_NEW);
 	menuFile->Append(wxID_OPEN);
+	menuFile->Append(wxID_SAVE);
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
 	wxMenu * menuHelp = new wxMenu();
@@ -110,8 +116,6 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	animationSpritesPanel = nullptr; // initializing
 	animationSpritesSizer = nullptr; // to prevent warnings
-	spritePlaceholderBitmap = new wxBitmap();
-	spritePlaceholderBitmap->LoadFile("res/misc/sprite_placeholder.png", wxBITMAP_TYPE_PNG);
 	auto bitmap = new unsigned char[3072];
 	auto alpha = new unsigned char[1024];
 	for (int i = 0, j = 0; i < 1024; ++i, j += 3)
@@ -168,7 +172,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	// attributes
 	auto attrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Attributes");
-	auto attrsPanel = new wxPanel(mainPanel, -1);
+	attrsPanel = new wxPanel(mainPanel, -1);
 	auto attrsPanelSizer = new wxGridSizer(4, 0, 0);
 
 	wxCheckBox * curCb = nullptr;
@@ -220,6 +224,10 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
 	curCb = attrCheckboxes[ID_ATTR_IS_USABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_USABLE, "Is usable");
 	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	for (int i = ID_ATTR_IS_GROUND_BORDER; i < ID_ATTR_LAST; ++i)
+	{
+		attrCheckboxes[i]->Bind(wxEVT_CHECKBOX, &MainWindow::OnToggleAttrCheckbox, this);
+	}
 
 	attrsPanel->SetSizer(attrsPanelSizer);
 	attrsBox->Add(attrsPanel, 1, wxEXPAND);
@@ -270,16 +278,29 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	// variables
 	currentXDiv = currentYDiv = 0;
+
+	// disabling main panel and all nested controls until correct .dat / .spr files will be loaded or created
+	mainPanel->Disable();
+	animationPanel->Disable();
+	attrsPanel->Disable();
+}
+
+void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
+{
+	DatSprReaderWriter::getInstance().initNewData();
+	mainPanel->Enable();
 }
 
 void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
 {
-	DatSprOpenDialog * dialog = new DatSprOpenDialog(this);
+	DatSprOpenSaveDialog * dialog = new DatSprOpenSaveDialog(this,
+			(event.GetId() == wxID_OPEN ? DatSprOpenSaveDialog::MODE_OPEN : DatSprOpenSaveDialog::MODE_SAVE));
 	dialog->ShowModal();
 }
 
 void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 {
+	mainPanel->Enable();
 	currentCategory = CategoryItem;
 	fillObjectsListBox();
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
@@ -310,7 +331,7 @@ void MainWindow::OnObjectCategoryChanged(wxCommandEvent & event)
 	}
 	fillObjectsListBox();
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
-	selectedObject = objects->at(0);
+	selectedObject = objects->size() > 0 ? objects->at(0) : nullptr;
 	setAttributeValues();
 	fillObjectSprites();
 	fillAnimationSection();
@@ -326,12 +347,18 @@ void MainWindow::fillObjectsListBox()
 	{
 		objectIds.Add(wxString::Format("%i", v->id));
 	}
-	objectsListBox->InsertItems(objectIds, 0);
-	objectsListBox->SetSelection(0);
+	if (objectIds.size() > 0)
+	{
+		objectsListBox->InsertItems(objectIds, 0);
+		objectsListBox->SetSelection(0);
+	}
 }
 
 void MainWindow::OnObjectSelected(wxCommandEvent & event)
 {
+	animationPanel->Enable();
+	attrsPanel->Enable();
+
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
 	int objectId = wxAtoi(event.GetString());
 	if (currentCategory == CategoryItem)
@@ -355,6 +382,9 @@ void MainWindow::setAttributeValues()
 	{
 		attrCheckboxes[i]->SetValue(false);
 	}
+
+	if (!selectedObject) return;
+
 	// then setting values
 	if (selectedObject->isGroundBorder)
 	{
@@ -450,9 +480,88 @@ void MainWindow::setAttributeValues()
 	}
 }
 
+void MainWindow::OnToggleAttrCheckbox(wxCommandEvent & event)
+{
+	bool value = (bool) event.GetInt();
+	switch (event.GetId())
+	{
+		case ID_ATTR_IS_GROUND_BORDER:
+			selectedObject->isGroundBorder = value;
+		break;
+		case ID_ATTR_IS_ON_TOP:
+			selectedObject->isOnTop = value;
+		break;
+		case ID_ATTR_IS_CONTAINER:
+			selectedObject->isContainer = value;
+		break;
+		case ID_ATTR_IS_STACKABLE:
+			selectedObject->isStackable = value;
+		break;
+		case ID_ATTR_IS_FORCE_USE:
+			selectedObject->isForceUse = value;
+		break;
+		case ID_ATTR_IS_MULTI_USE:
+			selectedObject->isMultiUse = value;
+		break;
+		case ID_ATTR_IS_FLUID_CONTAINER:
+			selectedObject->isFluidContainer = value;
+		break;
+		case ID_ATTR_IS_SPLASH:
+			selectedObject->isSplash = value;
+		break;
+		case ID_ATTR_BLOCKS_PROJECTILES:
+			selectedObject->blocksProjectiles = value;
+		break;
+		case ID_ATTR_IS_PICKUPABLE:
+			selectedObject->isPickupable = value;
+		break;
+		case ID_ATTR_IS_WALKABLE:
+			selectedObject->isWalkable = value;
+		break;
+		case ID_ATTR_IS_MOVABLE:
+			selectedObject->isMovable = value;
+		break;
+		case ID_ATTR_IS_PATHABLE:
+			selectedObject->isPathable = value;
+		break;
+		case ID_ATTR_CAN_BE_HIDDEN:
+			selectedObject->canBeHidden = value;
+		break;
+		case ID_ATTR_IS_HANGABLE:
+			selectedObject->isHangable = value;
+		break;
+		case ID_ATTR_IS_HOOK_SOUTH:
+			selectedObject->isHookSouth = value;
+		break;
+		case ID_ATTR_IS_HOOK_EAST:
+			selectedObject->isHookEast = value;
+		break;
+		case ID_ATTR_IS_ROTATABLE:
+			selectedObject->isRotatable = value;
+		break;
+		case ID_ATTR_IS_TRANSLUCENT:
+			selectedObject->isTranslucent = value;
+		break;
+		case ID_ATTR_IS_LYING_CORPSE:
+			selectedObject->isLyingCorpse = value;
+		break;
+		case ID_ATTR_IS_FULL_GROUND:
+			selectedObject->isFullGround = value;
+		break;
+		case ID_ATTR_IGNORE_LOOK:
+			selectedObject->ignoreLook = value;
+		break;
+		case ID_ATTR_IS_USABLE:
+			selectedObject->isUsable = value;
+		break;
+	}
+}
+
 void MainWindow::fillObjectSprites()
 {
 	objectSpritesPanelSizer->Clear(true);
+
+	if (!selectedObject) return;
 
 	auto sprites = DatSprReaderWriter::getInstance().getSprites();
 	shared_ptr <Sprite> sprite = nullptr;
@@ -475,6 +584,14 @@ void MainWindow::fillObjectSprites()
 				image = new wxImage(32, 32, sprite->rgb, sprite->alpha, true);
 				bitmap = new wxBitmap(*image);
 				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, -1, *bitmap);
+
+				// writing bitmap (id) into object client data
+				char * buf = new char[10];
+				sprintf(buf, "e%d", sprite->id); // first "e" char is for indicating that it's "existing" sprite
+				staticBitmap->SetClientData(buf);
+
+				staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
+
 				objectSpritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
 				spriteIdLabel = new wxStaticText(objectSpritesPanel, -1, wxString::Format("%i", spriteId));
 				objectSpritesPanelSizer->Add(spriteIdLabel, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
@@ -494,6 +611,8 @@ void MainWindow::fillObjectSprites()
 
 void MainWindow::fillAnimationSection()
 {
+	if (!selectedObject) return;
+
 	animationWidthInput->SetValue(wxString::Format("%i", selectedObject->width));
 	animationHeightInput->SetValue(wxString::Format("%i", selectedObject->height));
 
@@ -519,7 +638,7 @@ void MainWindow::buildAnimationSpriteHolders()
 
 	for (unsigned int i = 0; i < selectedObject->width * selectedObject->height; ++i)
 	{
-		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, *spritePlaceholderBitmap);
+		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, *stubImage);
 		animationSpritesSizer->Add(animationSpriteBitmaps[i]);
 
 		// for sprites drag & drop
@@ -609,6 +728,7 @@ void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
 	{
 		selectedObject->width = wxAtoi(animationWidthInput->GetValue());
 		buildAnimationSpriteHolders();
+		fillAnimationSprites();
 	}
 }
 
@@ -618,6 +738,7 @@ void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
 	{
 		selectedObject->height = wxAtoi(animationHeightInput->GetValue());
 		buildAnimationSpriteHolders();
+		fillAnimationSprites();
 	}
 }
 
@@ -626,10 +747,57 @@ void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
 	unsigned int xDiv = 0;
 	switch (event.GetId())
 	{
-		case ID_DIR_TOP_BUTTON: xDiv = ORIENT_NORTH; break;
-		case ID_DIR_RIGHT_BUTTON: xDiv = ORIENT_EAST; break;
-		case ID_DIR_BOTTOM_BUTTON: xDiv = ORIENT_SOUTH; break;
-		case ID_DIR_LEFT_BUTTON: xDiv = ORIENT_WEST; break;
+		case ID_DIR_TOP_BUTTON:
+			xDiv = ORIENT_NORTH;
+		break;
+		case ID_DIR_RIGHT_BUTTON:
+			if (selectedObject->patternWidth < 2)
+			{
+				wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, "east"), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
+				if (confirmation.ShowModal() == wxID_YES)
+				{
+					selectedObject->patternWidth = 2;
+					resizeObjectSpriteIDsArray(selectedObject);
+					xDiv = ORIENT_EAST;
+				}
+			}
+			else
+			{
+				xDiv = ORIENT_EAST;
+			}
+		break;
+		case ID_DIR_BOTTOM_BUTTON:
+			if (selectedObject->patternWidth < 3)
+			{
+				wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, "south"), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
+				if (confirmation.ShowModal() == wxID_YES)
+				{
+					selectedObject->patternWidth = 3;
+					resizeObjectSpriteIDsArray(selectedObject);
+					xDiv = ORIENT_SOUTH;
+				}
+			}
+			else
+			{
+				xDiv = ORIENT_SOUTH;
+			}
+		break;
+		case ID_DIR_LEFT_BUTTON:
+			if (selectedObject->patternWidth < 4)
+			{
+				wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, "west"), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
+				if (confirmation.ShowModal() == wxID_YES)
+				{
+					selectedObject->patternWidth = 4;
+					resizeObjectSpriteIDsArray(selectedObject);
+					xDiv = ORIENT_WEST;
+				}
+			}
+			else
+			{
+				xDiv = ORIENT_WEST;
+			}
+		break;
 	}
 	if (xDiv < selectedObject->patternWidth)
 	{
@@ -663,12 +831,18 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 {
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
 	auto newObject = make_shared <DatObject> ();
-	newObject->id = objects->size() + 1;
+	newObject->id = objects->size() + (currentCategory == CategoryItem ? 100 : 1);
 	newObject->width = newObject->height = 1;
+	newObject->patternWidth = newObject->patternHeight = newObject->patternDepth = 1;
+	newObject->layersCount = newObject->phasesCount = newObject->spriteCount = 1;
+	newObject->spriteIDs = new unsigned int[1] { 0 };
 	objects->push_back(newObject);
 	selectedObject = newObject;
 	objectsListBox->Insert(wxString::Format("%i", newObject->id), objectsListBox->GetCount());
 	objectsListBox->SetSelection(objectsListBox->GetCount() - 1);
+
+	animationPanel->Enable();
+	attrsPanel->Enable();
 
 	setAttributeValues();
 	fillObjectSprites();
@@ -703,10 +877,10 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 
 			// writing bitmap index (id) into object client data
 			char * buf = new char[10];
-			sprintf(buf, "%d", bitmapId);
+			sprintf(buf, "i%d", bitmapId); // first "i" char is for indicating that it's "imported" sprite
 			staticBitmap->SetClientData(buf);
 
-			staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedSprite, this);
+			staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
 
 			newSpritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
 			filename.Assign(p);
@@ -718,7 +892,7 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 	}
 }
 
-void MainWindow::OnClickImportedSprite(wxMouseEvent & event)
+void MainWindow::OnClickImportedOrObjectSprite(wxMouseEvent & event)
 {
 	auto staticBitmap = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
 	char * buf = (char *) staticBitmap->GetClientData();
@@ -752,7 +926,25 @@ void MainWindow::clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBit
 	{
 		auto bmp = (wxBitmap *) staticBitmap->GetClientData();
 		staticBitmap->SetBitmap(*bmp);
+		staticBitmap->SetClientData(nullptr);
 		delete bmp;
+	}
+}
+
+void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
+{
+	unsigned int oldSpriteCount = object->spriteCount;
+	unsigned int * oldSpriteIDs = object->spriteIDs;
+	object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
+                      * object->patternHeight * object->patternDepth * object->phasesCount;
+	object->spriteIDs = new unsigned int[object->spriteCount];
+	for (unsigned int i = 0; i < oldSpriteCount; ++i)
+	{
+		object->spriteIDs[i] = oldSpriteIDs[i];
+	}
+	for (unsigned int i = oldSpriteCount; i < object->spriteCount; ++i)
+	{
+		object->spriteIDs[i] = 0;
 	}
 }
 
@@ -768,24 +960,76 @@ void MainWindow::OnAbout(wxCommandEvent & event)
 
 bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, const wxString & data)
 {
-	int spriteId = wxAtoi(data);
-	auto importedSprites = mainWindow->getImportedSprites();
-	auto bitmap = importedSprites[spriteId];
-	auto staticBitmap = mainWindow->getAnimationSpriteBitmaps()[getSpriteHolderIndex()];
-	staticBitmap->SetBitmap(*bitmap);
+	bool result = false;
+	const char * charData = data.c_str();
+	int spriteId = wxAtoi(data.substr(1));
+	unsigned int frameSize = mainWindow->selectedObject->width * mainWindow->selectedObject->height;
+	unsigned int spriteIdIndex = (mainWindow->currentXDiv + mainWindow->currentFrame * mainWindow->selectedObject->patternWidth)
+	                           * frameSize + (frameSize - 1 - spriteHolderIndex);
+	if (charData[0] == 'i') // imported sprite
+	{
+		auto sprites = DatSprReaderWriter::getInstance().getSprites();
+		auto sprite = make_shared <Sprite> ();
+		sprite->id = DatSprReaderWriter::getInstance().incrementMaxSpriteId();
+		auto bitmap = mainWindow->importedSprites[spriteId];
+		auto image = bitmap->ConvertToImage();
+		if (image.HasAlpha())
+		{
+			auto pixelData = new wxAlphaPixelData(*bitmap);
+			auto it = pixelData->GetPixels();
+			for (int i = 0, j = 0; i < 3072; i += 3, ++j)
+			{
+				sprite->rgb[i] = it.Red();
+				sprite->rgb[i + 1] = it.Green();
+				sprite->rgb[i + 2] = it.Blue();
+				sprite->alpha[j] = it.Alpha();
+				++it;
+			};
+		}
+		else
+		{
+			auto pixelData = new wxNativePixelData(*bitmap);
+			auto it = pixelData->GetPixels();
+			for (int i = 0, j = 0; i < 3072; i += 3, ++j)
+			{
+				sprite->rgb[i] = it.Red();
+				sprite->rgb[i + 1] = it.Green();
+				sprite->rgb[i + 2] = it.Blue();
+				sprite->alpha[j] = 255;
+				++it;
+			};
+		}
+		sprite->valid = true;
+		(*sprites)[sprite->id] = sprite;
+		mainWindow->selectedObject->spriteIDs[spriteIdIndex] = sprite->id;
+		mainWindow->fillObjectSprites();
+		mainWindow->fillAnimationSprites();
+		result = true;
+	}
+	else if (charData[0] == 'e') // existing sprite
+	{
+		mainWindow->selectedObject->spriteIDs[spriteIdIndex] = spriteId;
+		mainWindow->fillObjectSprites();
+		mainWindow->fillAnimationSprites();
+		result = true;
+	}
+
+	// resetting cached bitmap used for selection handling
+	auto staticBitmap = mainWindow->animationSpriteBitmaps[spriteHolderIndex];
 	staticBitmap->SetClientData(nullptr);
-	return true;
+
+	return result;
 }
 
 wxDragResult MainWindow::AnimationSpriteDropTarget::OnEnter(wxCoord x, wxCoord y, wxDragResult defResult)
 {
-	auto sBmp = mainWindow->getAnimationSpriteBitmaps()[getSpriteHolderIndex()];
+	auto sBmp = mainWindow->animationSpriteBitmaps[spriteHolderIndex];
 	mainWindow->drawAnimationSpriteSelection(sBmp);
 	return defResult;
 }
 
 void MainWindow::AnimationSpriteDropTarget::OnLeave()
 {
-	auto sBmp = mainWindow->getAnimationSpriteBitmaps()[getSpriteHolderIndex()];
+	auto sBmp = mainWindow->animationSpriteBitmaps[spriteHolderIndex];
 	mainWindow->clearAnimationSpriteSelection(sBmp);
 }

@@ -1,6 +1,4 @@
-- animation section (direction, frame switch)
-- animtion width & height validator
-- create new objects
-- import sprites (including big sprites)
+- animation width & height validator
 - saving files (don't forget to save alpha channel of sprites)
 - validate image file types when importing sprites
+- drag big sprites and fill cells automatically

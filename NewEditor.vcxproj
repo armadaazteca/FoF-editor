@@ -77,7 +77,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="src\DatSprOpenDialog.h" />
+    <ClInclude Include="src\DatSprOpenSaveDialog.h" />
     <ClInclude Include="src\DatSprReaderWriter.h" />
     <ClInclude Include="src\DatSprStructs.h" />
     <ClInclude Include="src\DatStructs.h" />
@@ -88,7 +88,7 @@
     <ClInclude Include="src\Settings.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\DatSprOpenDialog.cpp" />
+    <ClCompile Include="src\DatSprOpenSaveDialog.cpp" />
     <ClCompile Include="src\DatSprReaderWriter.cpp" />
     <ClCompile Include="src\Events.cpp" />
     <ClCompile Include="src\MainWindow.cpp" />

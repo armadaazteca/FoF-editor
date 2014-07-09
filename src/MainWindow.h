@@ -12,6 +12,8 @@ using namespace std;
 class MainWindow : public wxFrame
 {
 public:
+	static const wxString DIRECTION_QUESTION, DIRECTION_QUESTION_TITLE;
+
 	MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size);
 
 	class AnimationSpriteDropTarget : public wxTextDropTarget
@@ -21,7 +23,6 @@ public:
 		virtual bool OnDropText(wxCoord x, wxCoord y, const wxString & data);
 		virtual wxDragResult OnEnter(wxCoord x, wxCoord y, wxDragResult defResult);
 		virtual void OnLeave();
-		inline unsigned int getSpriteHolderIndex() { return spriteHolderIndex; }
 		inline void setSpriteHolderIndex(unsigned int index) { spriteHolderIndex = index; }
 		inline void setMainWindow(MainWindow * mainWindow) { this->mainWindow = mainWindow; };
 		inline virtual ~AnimationSpriteDropTarget() {}
@@ -29,9 +30,6 @@ public:
 		MainWindow * mainWindow = nullptr;
 		unsigned int spriteHolderIndex = 0;
 	};
-
-	inline std::vector <shared_ptr <wxBitmap>> getImportedSprites() { return importedSprites; }
-	inline wxGenericStaticBitmap ** getAnimationSpriteBitmaps() { return animationSpriteBitmaps; }
 
 private:
 	static const wxString CATEGORIES[];
@@ -84,7 +82,7 @@ private:
 	wxScrolledWindow * objectSpritesPanel = nullptr, * newSpritesPanel = nullptr;
 	wxFlexGridSizer * objectSpritesPanelSizer = nullptr, * newSpritesPanelSizer = nullptr;
 
-	wxPanel * animationPanel = nullptr, * animationSpritesPanel = nullptr;
+	wxPanel * attrsPanel = nullptr, * animationPanel = nullptr, * animationSpritesPanel = nullptr;
 	wxFlexGridSizer * animationBoxExpandSizer = nullptr, * animationMainGridSizer = nullptr;
 	wxBoxSizer * animationPanelSizer = nullptr;
 	wxGridSizer * animationSpritesSizer = nullptr;
@@ -95,14 +93,15 @@ private:
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
 	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0;
 	wxImage * stubImage = nullptr;
-	wxBitmap * spritePlaceholderBitmap = nullptr;
 
 	std::vector <shared_ptr <wxBitmap>> importedSprites;
 
+	void OnCreateNewFiles(wxCommandEvent & event);
 	void OnOpenDatSprDialog(wxCommandEvent & event);
 	void OnDatSprLoaded(wxCommandEvent & event);
 	void OnObjectCategoryChanged(wxCommandEvent & event);
 	void OnObjectSelected(wxCommandEvent & event);
+	void OnToggleAttrCheckbox(wxCommandEvent & event);
 	void OnAnimWidthChanged(wxCommandEvent & event);
 	void OnAnimHeightChanged(wxCommandEvent & event);
 	void OnClickOrientationButton(wxCommandEvent & event);
@@ -110,7 +109,7 @@ private:
 	void OnClickNextFrameButton(wxCommandEvent & event);
 	void OnClickNewObjectButton(wxCommandEvent & event);
 	void OnClickImportSpriteButton(wxCommandEvent & event);
-	void OnClickImportedSprite(wxMouseEvent & event);
+	void OnClickImportedOrObjectSprite(wxMouseEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();
@@ -121,6 +120,7 @@ private:
 	void buildAnimationSpriteHolders();
 	void drawAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
 	void clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
+	void resizeObjectSpriteIDsArray(shared_ptr <DatObject> object);
 
 	wxDECLARE_EVENT_TABLE();
 };
