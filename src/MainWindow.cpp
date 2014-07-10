@@ -304,7 +304,12 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 	currentCategory = CategoryItem;
 	fillObjectsListBox();
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
-	selectedObject = objects->at(0);
+	selectedObject = objects->size() > 0 ? objects->at(0) : nullptr;
+	if (selectedObject)
+	{
+		animationPanel->Enable();
+		attrsPanel->Enable();
+	}
 	setAttributeValues();
 	fillObjectSprites();
 	fillAnimationSection();

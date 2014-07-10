@@ -15,6 +15,7 @@ DatSprReaderWriter & DatSprReaderWriter::getInstance()
 void DatSprReaderWriter::initNewData()
 {
 	datSignature = DEFAULT_DAT_SIGNATURE;
+	sprSignature = DEFAULT_SPR_SIGNATURE;
 	items = make_shared <DatObjectList> ();
 	creatures = make_shared <DatObjectList> ();
 	effects = make_shared <DatObjectList> ();
@@ -187,10 +188,8 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 						case AttrUsable:
 							object->isUsable = true;
 						break;
-						case AttrLast:
-						break;
 					}
-					if (attr < AttrLast) object->allAttrs[attr] = true;
+					object->allAttrs[attr] = true;
 				}
 				while (attr != AttrLast);
 
@@ -247,7 +246,7 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 		}
 		maxSpriteId = id;
 
-		unsigned short pixelDataSize = 0, transparentPixels = 0, coloredPixels = 0;
+		unsigned short transparentPixels = 0, coloredPixels = 0;
 		unsigned short readPos = 0, writePosRgb = 0, writePosAlpha = 0;
 		unsigned char * bitmap = nullptr, * alpha = nullptr;
 		unsigned int readings = 0;
@@ -256,17 +255,24 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 			sprite = kv.second;
 			if (sprite->offset != 0)
 			{
-				file.seekg(sprite->offset  + 3); // +3 to skip transparent pixels color
-				pixelDataSize = readU16();
+				file.seekg(sprite->offset + 3); // +3 to skip transparent pixels color
+				unsigned short pixelDataSize = readU16();
 				if (pixelDataSize == 0) continue;
+				sprite->compressedDataSize = pixelDataSize;
+				unsigned char * pixelDataBuffer = new unsigned char[pixelDataSize];
+				file.read((char *) pixelDataBuffer, pixelDataSize);
+				sprite->compressedData = pixelDataBuffer;
+
 				readPos = writePosRgb = writePosAlpha = 0;
 				bitmap = sprite->rgb;
 				alpha = sprite->alpha;
 				// decompress pixels
 				while (readPos < pixelDataSize && writePosRgb < Sprite::RGB_SIZE)
 				{
-					transparentPixels = readU16();
-					coloredPixels = readU16();
+					memcpy(&transparentPixels, &pixelDataBuffer[readPos], 2);
+					readPos += 2;
+					memcpy(&coloredPixels, &pixelDataBuffer[readPos], 2);
+					readPos += 2;
 					for (unsigned short i = 0; i < transparentPixels && writePosRgb < Sprite::RGB_SIZE; ++i)
 					{
 						bitmap[writePosRgb + 0] = 0x00;
@@ -278,14 +284,13 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 					}
 					for (unsigned short i = 0; i < coloredPixels && writePosRgb < Sprite::RGB_SIZE; ++i)
 					{
-						bitmap[writePosRgb + 0] = readByte();
-						bitmap[writePosRgb + 1] = readByte();
-						bitmap[writePosRgb + 2] = readByte();
+						bitmap[writePosRgb + 0] = pixelDataBuffer[readPos++];
+						bitmap[writePosRgb + 1] = pixelDataBuffer[readPos++];
+						bitmap[writePosRgb + 2] = pixelDataBuffer[readPos++];
 						alpha[writePosAlpha] = 0xFF;
 						writePosRgb += 3;
 						writePosAlpha++;
 					}
-					readPos += 4 + (3 * coloredPixels);
 				}
 				// fill remaining pixels with alpha
 				while (writePosRgb < Sprite::RGB_SIZE)
@@ -365,7 +370,7 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 			currentList = lists[category];
 			for (auto & object : *currentList)
 			{
-				for (int attr = 0; attr < AttrLast; ++attr)
+				for (int attr = 0; attr <= AttrLast; ++attr)
 				{
 					if (object->allAttrs[attr])
 					{
@@ -438,8 +443,45 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 
 bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
+	file.open(filename.mb_str(), ios::out | ios::binary | ios::trunc);
 	if (file.is_open())
 	{
+		writeU32(sprSignature);
+		unsigned int spritesCount = sprites->size();
+		writeU32(spritesCount);
+
+		int begOffset = 0; // offset where sprite offsets writing begins
+		file.seekp(begOffset + spritesCount * 4); // skipping space required for writing sprite offsets
+
+		shared_ptr <Sprite> sprite = nullptr;
+		unsigned int id = 1;
+		int lastOffset = 0;
+		unsigned int writings = 0;
+		for (; id <= spritesCount; ++id)
+		{
+			sprite = (*sprites)[id];
+			sprite->offset = file.tellp();
+
+			// writing constant transparent pixels color - magenta
+			writeByte(255);
+			writeByte(0);
+			writeByte(255);
+
+			if (sprite->changed) // recompressing sprite pixel data
+			{
+
+			}
+			else // writing already existing compressed data
+			{
+				file.write((char *) sprite->compressedData, sprite->compressedDataSize);
+			}
+			lastOffset = file.tellp();
+			file.seekp(begOffset + (id - 1) * 4); // moving to the beginning to write sprite offset
+			writeU32(sprite->offset);
+			file.seekp(lastOffset); // moving back
+
+			progressUpdatable->updateProgress(++writings / (double) spritesCount);
+		}
 
 		file.close();
 	}

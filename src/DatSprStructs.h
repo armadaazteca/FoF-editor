@@ -86,7 +86,7 @@ struct DatObject
 	unsigned short minimapColor = 0;
 	unsigned short clothSlot = 0;
 	unsigned short lensHelp = 0;
-	bool allAttrs[255];
+	bool allAttrs[256];
 
 	// sprite data
 	unsigned char width = 0, height = 0, exactSize = 0;
@@ -94,16 +94,19 @@ struct DatObject
 	unsigned char layersCount, phasesCount = 0;
 	unsigned int spriteCount = 0;
 	unsigned int * spriteIDs = nullptr;
-	~DatObject() { delete[] spriteIDs; }
+	inline ~DatObject() { delete[] spriteIDs; }
 };
 
 struct Sprite
 {
 	// 1024 pixels, 3 bytes per rgb pixel, 1 byte for alpha channel
 	static const unsigned short RGB_SIZE = 3072, ALPHA_SIZE = 1024;
-	bool valid = false;
+	bool valid = false, changed = false;
 	unsigned int id = 0, offset = 0;
 	unsigned char rgb[RGB_SIZE], alpha[ALPHA_SIZE];
+	unsigned char * compressedData = nullptr;
+	unsigned short compressedDataSize = 0;
+	inline ~Sprite() { delete[] compressedData; }
 };
 
 #endif // _DAT_STRUCTS_H_

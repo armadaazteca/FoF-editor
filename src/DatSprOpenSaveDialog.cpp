@@ -136,6 +136,7 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 	{
 		settings.set("datSavePath", datPathStr);
 		settings.set("sprSavePath", sprPathStr);
+		settings.save();
 		currentLoading = LOADING_DAT;
 		if (DatSprReaderWriter::getInstance().writeDat(datPathStr, this))
 		{
@@ -143,9 +144,6 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			if (DatSprReaderWriter::getInstance().writeSpr(sprPathStr, this))
 			{
 				Close();
-				// notifying main window of that files has been loaded
-				//wxCommandEvent event(DAT_SPR_LOADED, 1);
-				//wxPostEvent(this->m_parent, event);
 			}
 			else
 			{
