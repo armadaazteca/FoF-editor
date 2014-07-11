@@ -4,3 +4,4 @@
 - drag big sprites and fill cells automatically
 - don't forget about 'always animated' checkbox
 - deal with exception related to sprite shared_ptr destruction
+- make some messages in status bar
