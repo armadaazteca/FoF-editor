@@ -242,6 +242,8 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 			sprite = make_shared <Sprite> ();
 			sprite->id = id;
 			sprite->offset = readU32();
+			sprite->rgb = new unsigned char[Sprite::RGB_SIZE];
+			sprite->alpha = new unsigned char[Sprite::ALPHA_SIZE];
 			(*sprites)[id] = sprite;
 		}
 		maxSpriteId = id;
@@ -355,7 +357,7 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 	if (file.is_open())
 	{
 		writeU32(datSignature);
-		writeU16(items->size() + 100);
+		writeU16(items->size() + 100 - 1);
 		writeU16(creatures->size());
 		writeU16(effects->size());
 		writeU16(projectiles->size());
@@ -432,6 +434,8 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 					writeU32(object->spriteIDs[i]);
 				}
 
+				if (file.bad()) return false;
+
 				progressUpdatable->updateProgress(++writings / (double) totalCount);
 			}
 		}
@@ -450,7 +454,7 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 		unsigned int spritesCount = sprites->size();
 		writeU32(spritesCount);
 
-		int begOffset = 0; // offset where sprite offsets writing begins
+		int begOffset = 8; // offset where sprite offsets writing begins
 		file.seekp(begOffset + spritesCount * 4); // skipping space required for writing sprite offsets
 
 		shared_ptr <Sprite> sprite = nullptr;
@@ -473,12 +477,18 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 			}
 			else // writing already existing compressed data
 			{
-				file.write((char *) sprite->compressedData, sprite->compressedDataSize);
+				writeU16(sprite->compressedDataSize);
+				if (sprite->compressedDataSize > 0)
+				{
+					file.write((char *) sprite->compressedData, sprite->compressedDataSize);
+				}
 			}
 			lastOffset = file.tellp();
 			file.seekp(begOffset + (id - 1) * 4); // moving to the beginning to write sprite offset
 			writeU32(sprite->offset);
 			file.seekp(lastOffset); // moving back
+
+			if (file.bad()) return false;
 
 			progressUpdatable->updateProgress(++writings / (double) spritesCount);
 		}

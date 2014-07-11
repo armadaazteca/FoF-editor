@@ -103,10 +103,11 @@ struct Sprite
 	static const unsigned short RGB_SIZE = 3072, ALPHA_SIZE = 1024;
 	bool valid = false, changed = false;
 	unsigned int id = 0, offset = 0;
-	unsigned char rgb[RGB_SIZE], alpha[ALPHA_SIZE];
+	unsigned char * rgb; //[RGB_SIZE];
+	unsigned char * alpha; //[ALPHA_SIZE];
 	unsigned char * compressedData = nullptr;
 	unsigned short compressedDataSize = 0;
-	inline ~Sprite() { delete[] compressedData; }
+	//inline ~Sprite() { delete[] compressedData; }
 };
 
 #endif // _DAT_STRUCTS_H_
