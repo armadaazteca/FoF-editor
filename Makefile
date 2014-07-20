@@ -1,5 +1,6 @@
 CC=g++
-FLAGS=-g -Wall -std=c++11 `wx-config --cppflags`
+FLAGS_debug=-g -O0 -Wall -std=c++11 `wx-config --cppflags`
+FLAGS_release=-O4 -std=c++11 `wx-config --cppflags`
 OBJECTS=obj/$(CONF)/NewEditor.o obj/$(CONF)/MainWindow.o obj/$(CONF)/DatSprOpenSaveDialog.o \
         obj/$(CONF)/DatSprReaderWriter.o obj/$(CONF)/Settings.o obj/$(CONF)/Events.o
 RESOURCES=bin/$(CONF)/res/icons/green_arrow_left.png
@@ -10,22 +11,22 @@ bin/$(CONF)/NewEditor: $(OBJECTS) $(RESOURCES)
 	$(CC) $(OBJECTS) -o bin/$(CONF)/NewEditor `wx-config --libs`
 	
 obj/$(CONF)/NewEditor.o: src/NewEditor.cpp src/NewEditor.h src/MainWindow.h
-	$(CC) $(FLAGS) -c src/NewEditor.cpp -o $@
+	$(CC) $(FLAGS_$(CONF)) -c src/NewEditor.cpp -o $@
 
 obj/$(CONF)/MainWindow.o: src/MainWindow.cpp src/MainWindow.h src/DatSprOpenSaveDialog.h src/DatSprReaderWriter.h src/Events.h
-	$(CC) $(FLAGS) -c src/MainWindow.cpp -o $@
+	$(CC) $(FLAGS_$(CONF)) -c src/MainWindow.cpp -o $@
 
 obj/$(CONF)/DatSprOpenSaveDialog.o: src/DatSprOpenSaveDialog.cpp src/DatSprOpenSaveDialog.h src/Settings.h src/Interfaces.h
-	$(CC) $(FLAGS) -c src/DatSprOpenSaveDialog.cpp -o $@
+	$(CC) $(FLAGS_$(CONF)) -c src/DatSprOpenSaveDialog.cpp -o $@
 	
 obj/$(CONF)/DatSprReaderWriter.o: src/DatSprReaderWriter.cpp src/DatSprReaderWriter.h src/DatSprStructs.h src/Interfaces.h
-	$(CC) $(FLAGS) -c src/DatSprReaderWriter.cpp -o $@
+	$(CC) $(FLAGS_$(CONF)) -c src/DatSprReaderWriter.cpp -o $@
 	
 obj/$(CONF)/Settings.o: src/Settings.cpp src/Settings.h
-	$(CC) $(FLAGS) -c src/Settings.cpp -o $@
+	$(CC) $(FLAGS_$(CONF)) -c src/Settings.cpp -o $@
 	
 obj/$(CONF)/Events.o: src/Events.cpp src/Events.h
-	$(CC) $(FLAGS) -c src/Events.cpp -o $@
+	$(CC) $(FLAGS_$(CONF)) -c src/Events.cpp -o $@
 	
 bin/$(CONF)/res/icons/green_arrow_left.png: res/icons/green_arrow_left.png
 	mkdir -p bin/$(CONF)/res/icons

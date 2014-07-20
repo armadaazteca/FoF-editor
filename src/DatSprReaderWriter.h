@@ -49,6 +49,8 @@ private:
 	void writeU16(unsigned short u16);
 	void writeU32(unsigned int u32);
 	void writeString(char * str);
+
+	//~DatSprReaderWriter();
 };
 
 #endif // _DAT_SPR_READER_WRITER_H_

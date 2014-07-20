@@ -43,7 +43,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	CreateStatusBar();
 
 	// constructing main menu
-	wxMenu * menuFile = new wxMenu();
+	auto menuFile = new wxMenu();
 	menuFile->Append(wxID_NEW);
 	menuFile->Append(wxID_OPEN);
 	menuFile->Append(wxID_SAVE);
@@ -116,13 +116,13 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	animationSpritesPanel = nullptr; // initializing
 	animationSpritesSizer = nullptr; // to prevent warnings
-	auto bitmap = new unsigned char[3072];
-	auto alpha = new unsigned char[1024];
+	stubImageRgb = unique_ptr <unsigned char []> (new unsigned char[Sprite::RGB_SIZE]);
+	stubImageAlpha = unique_ptr <unsigned char []> (new unsigned char[Sprite::ALPHA_SIZE]);
 	for (int i = 0, j = 0; i < 1024; ++i, j += 3)
 	{
-		bitmap[j] = bitmap[j + 1] = bitmap[j + 2] = alpha[i] = 0;
+		stubImageRgb[j] = stubImageRgb[j + 1] = stubImageRgb[j + 2] = stubImageAlpha[i] = 0;
 	}
-	stubImage = new wxImage(32, 32, bitmap, alpha);
+	stubImage = make_shared <wxImage> (32, 32, stubImageRgb.get(), stubImageAlpha.get(), true);
 
 	// frame control
 	auto frameNumberSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -293,9 +293,9 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 
 void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
 {
-	DatSprOpenSaveDialog * dialog = new DatSprOpenSaveDialog(this,
+	DatSprOpenSaveDialog dialog(this,
 			(event.GetId() == wxID_OPEN ? DatSprOpenSaveDialog::MODE_OPEN : DatSprOpenSaveDialog::MODE_SAVE));
-	dialog->ShowModal();
+	dialog.ShowModal();
 }
 
 void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
@@ -570,8 +570,6 @@ void MainWindow::fillObjectSprites()
 
 	auto sprites = DatSprReaderWriter::getInstance().getSprites();
 	shared_ptr <Sprite> sprite = nullptr;
-	wxImage * image = nullptr;
-	wxBitmap * bitmap = nullptr;
 	wxGenericStaticBitmap * staticBitmap = nullptr;
 	wxStaticText * spriteIdLabel = nullptr;
 
@@ -586,14 +584,15 @@ void MainWindow::fillObjectSprites()
 			if (sprite->valid)
 			{
 				hasAtLeastOneSprite = true;
-				image = new wxImage(32, 32, sprite->rgb, sprite->alpha, true);
-				bitmap = new wxBitmap(*image);
-				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, -1, *bitmap);
+				wxImage image(32, 32, sprite->rgb.get(), sprite->alpha.get(), true);
+				wxBitmap bitmap(image);
+				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, -1, bitmap);
 
 				// writing bitmap (id) into object client data
 				char * buf = new char[10];
 				sprintf(buf, "e%d", sprite->id); // first "e" char is for indicating that it's "existing" sprite
 				staticBitmap->SetClientData(buf);
+				spriteTextIDs.push_back(unique_ptr <char[]> (buf)); // to be properly deleted later
 
 				staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
 
@@ -692,18 +691,17 @@ void MainWindow::fillAnimationSprites()
 				{
 					if (layer == 0) // filling bottom layer
 					{
-						wxImage image(32, 32, sprite->rgb, sprite->alpha, true);
+						wxImage image(32, 32, sprite->rgb.get(), sprite->alpha.get(), true);
 						wxBitmap bitmap(image);
 						animationSpriteBitmaps[j]->SetBitmap(bitmap);
 					}
 					else
 					{
-						auto oldImageMemDC = new wxMemoryDC();
-						oldImageMemDC->SelectObjectAsSource(animationSpriteBitmaps[j]->GetBitmap());
-						wxImage newImage(32, 32, sprite->rgb, sprite->alpha, true);
+						wxMemoryDC oldImageMemDC;
+						oldImageMemDC.SelectObjectAsSource(animationSpriteBitmaps[j]->GetBitmap());
+						wxImage newImage(32, 32, sprite->rgb.get(), sprite->alpha.get(), true);
 						wxBitmap newBitmap(newImage);
-						oldImageMemDC->DrawBitmap(newBitmap, 0, 0, true);
-						delete oldImageMemDC;
+						oldImageMemDC.DrawBitmap(newBitmap, 0, 0, true);
 					}
 				}
 				else
@@ -840,7 +838,7 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	newObject->width = newObject->height = 1;
 	newObject->patternWidth = newObject->patternHeight = newObject->patternDepth = 1;
 	newObject->layersCount = newObject->phasesCount = newObject->spriteCount = 1;
-	newObject->spriteIDs = new unsigned int[1] { 0 };
+	newObject->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[1] { 0 });
 	objects->push_back(newObject);
 	selectedObject = newObject;
 	objectsListBox->Insert(wxString::Format("%i", newObject->id), objectsListBox->GetCount());
@@ -858,11 +856,11 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 {
 	Settings & settings = Settings::getInstance();
 	const wxString & spriteImportPath = settings.get("lastSpriteImportPath");
-	wxFileDialog * browseDialog = new wxFileDialog(this, wxFileSelectorPromptStr, spriteImportPath, "", "", wxFD_MULTIPLE);
-	if (browseDialog->ShowModal() == wxID_OK)
+	wxFileDialog browseDialog(this, wxFileSelectorPromptStr, spriteImportPath, "", "", wxFD_MULTIPLE);
+	if (browseDialog.ShowModal() == wxID_OK)
 	{
 		wxArrayString paths;
-		browseDialog->GetPaths(paths);
+		browseDialog.GetPaths(paths);
 		// saving directory path for future usage
 		settings.set("lastSpriteImportPath", wxFileName(paths[0]).GetPath());
 		settings.save();
@@ -929,7 +927,7 @@ void MainWindow::clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBit
 {
 	if (staticBitmap->GetClientData())
 	{
-		auto bmp = (wxBitmap *) staticBitmap->GetClientData();
+		auto bmp = reinterpret_cast <wxBitmap *> (staticBitmap->GetClientData());
 		staticBitmap->SetBitmap(*bmp);
 		staticBitmap->SetClientData(nullptr);
 		delete bmp;
@@ -938,11 +936,11 @@ void MainWindow::clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBit
 
 void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
 {
-	unsigned int oldSpriteCount = object->spriteCount;
-	unsigned int * oldSpriteIDs = object->spriteIDs;
+	auto oldSpriteCount = object->spriteCount;
+	auto oldSpriteIDs = unique_ptr <unsigned int[]> (object->spriteIDs.release());
 	object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
                       * object->patternHeight * object->patternDepth * object->phasesCount;
-	object->spriteIDs = new unsigned int[object->spriteCount];
+	object->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[object->spriteCount]);
 	for (unsigned int i = 0; i < oldSpriteCount; ++i)
 	{
 		object->spriteIDs[i] = oldSpriteIDs[i];
@@ -976,13 +974,15 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 		auto sprites = DatSprReaderWriter::getInstance().getSprites();
 		auto sprite = make_shared <Sprite> ();
 		sprite->id = DatSprReaderWriter::getInstance().incrementMaxSpriteId();
+		sprite->rgb = unique_ptr <unsigned char[]> (new unsigned char[Sprite::RGB_SIZE]);
+		sprite->alpha = unique_ptr <unsigned char[]> (new unsigned char[Sprite::ALPHA_SIZE]);
 		auto bitmap = mainWindow->importedSprites[spriteId];
 		auto image = bitmap->ConvertToImage();
 		if (image.HasAlpha())
 		{
-			auto pixelData = new wxAlphaPixelData(*bitmap);
-			auto it = pixelData->GetPixels();
-			for (int i = 0, j = 0; i < 3072; i += 3, ++j)
+			wxAlphaPixelData pixelData(*bitmap);
+			auto it = pixelData.GetPixels();
+			for (int i = 0, j = 0; i < Sprite::RGB_SIZE; i += 3, ++j)
 			{
 				sprite->rgb[i] = it.Red();
 				sprite->rgb[i + 1] = it.Green();
@@ -993,9 +993,9 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 		}
 		else
 		{
-			auto pixelData = new wxNativePixelData(*bitmap);
-			auto it = pixelData->GetPixels();
-			for (int i = 0, j = 0; i < 3072; i += 3, ++j)
+			wxNativePixelData pixelData(*bitmap);
+			auto it = pixelData.GetPixels();
+			for (int i = 0, j = 0; i < Sprite::RGB_SIZE; i += 3, ++j)
 			{
 				sprite->rgb[i] = it.Red();
 				sprite->rgb[i + 1] = it.Green();

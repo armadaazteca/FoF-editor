@@ -1,6 +1,10 @@
 #ifndef _DAT_STRUCTS_H_
 #define _DAT_STRUCTS_H_
 
+#include <memory>
+
+using namespace std;
+
 enum DatObjectCategory : unsigned char
 {
 	CategoryItem = 0,
@@ -78,7 +82,7 @@ struct DatObject
 	short displacementX = 0, displacementY = 0;
 	short marketCategory = 0;
 	unsigned short marketTradeAs = 0, marketShowAs = 0;
-	char * marketName = nullptr;
+	unique_ptr <char[]> marketName = nullptr;
 	unsigned short marketRestrictVocation = 0;
 	unsigned short marketRequiredLevel = 0;
 	short elevation = 0;
@@ -93,8 +97,7 @@ struct DatObject
 	unsigned char patternWidth = 0, patternHeight = 0, patternDepth = 0;
 	unsigned char layersCount, phasesCount = 0;
 	unsigned int spriteCount = 0;
-	unsigned int * spriteIDs = nullptr;
-	inline ~DatObject() { delete[] spriteIDs; }
+	unique_ptr <unsigned int[]> spriteIDs = nullptr;
 };
 
 struct Sprite
@@ -103,11 +106,10 @@ struct Sprite
 	static const unsigned short RGB_SIZE = 3072, ALPHA_SIZE = 1024;
 	bool valid = false, changed = false;
 	unsigned int id = 0, offset = 0;
-	unsigned char * rgb; //[RGB_SIZE];
-	unsigned char * alpha; //[ALPHA_SIZE];
-	unsigned char * compressedData = nullptr;
+	unique_ptr <unsigned char[]> rgb = nullptr;
+	unique_ptr <unsigned char[]> alpha = nullptr;
 	unsigned short compressedDataSize = 0;
-	//inline ~Sprite() { delete[] compressedData; }
+	unique_ptr <unsigned char[]> compressedData = nullptr;
 };
 
 #endif // _DAT_STRUCTS_H_

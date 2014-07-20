@@ -21,6 +21,7 @@ void DatSprReaderWriter::initNewData()
 	effects = make_shared <DatObjectList> ();
 	projectiles = make_shared <DatObjectList> ();
 	sprites = make_shared <SpriteMap> ();
+	maxSpriteId = 1;
 	hasData = true;
 }
 
@@ -181,7 +182,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 							object->marketCategory = readU16();
 							object->marketTradeAs = readU16();
 							object->marketShowAs = readU16();
-							object->marketName = readString();
+							object->marketName = unique_ptr <char[]> (readString());
 							object->marketRestrictVocation = readU16();
 							object->marketRequiredLevel = readU16();
 						break;
@@ -207,7 +208,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 				object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
 				                    * object->patternHeight * object->patternDepth * object->phasesCount;
 
-				object->spriteIDs = new unsigned int[object->spriteCount];
+				object->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[object->spriteCount]);
 				for (unsigned int i = 0; i < object->spriteCount; ++i)
 				{
 					object->spriteIDs[i] = readU32();
@@ -242,8 +243,8 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 			sprite = make_shared <Sprite> ();
 			sprite->id = id;
 			sprite->offset = readU32();
-			sprite->rgb = new unsigned char[Sprite::RGB_SIZE];
-			sprite->alpha = new unsigned char[Sprite::ALPHA_SIZE];
+			sprite->rgb = unique_ptr <unsigned char[]> (new unsigned char[Sprite::RGB_SIZE]);
+			sprite->alpha = unique_ptr <unsigned char[]> (new unsigned char[Sprite::ALPHA_SIZE]);
 			(*sprites)[id] = sprite;
 		}
 		maxSpriteId = id;
@@ -261,13 +262,13 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 				unsigned short pixelDataSize = readU16();
 				if (pixelDataSize == 0) continue;
 				sprite->compressedDataSize = pixelDataSize;
-				unsigned char * pixelDataBuffer = new unsigned char[pixelDataSize];
+				sprite->compressedData = unique_ptr <unsigned char[]> (new unsigned char[pixelDataSize]);
+				auto pixelDataBuffer = sprite->compressedData.get();
 				file.read((char *) pixelDataBuffer, pixelDataSize);
-				sprite->compressedData = pixelDataBuffer;
 
 				readPos = writePosRgb = writePosAlpha = 0;
-				bitmap = sprite->rgb;
-				alpha = sprite->alpha;
+				bitmap = sprite->rgb.get();
+				alpha = sprite->alpha.get();
 				// decompress pixels
 				while (readPos < pixelDataSize && writePosRgb < Sprite::RGB_SIZE)
 				{
@@ -410,7 +411,7 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 								writeU16(object->marketCategory);
 								writeU16(object->marketTradeAs);
 								writeU16(object->marketShowAs);
-								writeString(object->marketName);
+								writeString(object->marketName.get());
 								writeU16(object->marketRestrictVocation);
 								writeU16(object->marketRequiredLevel);
 							break;
@@ -464,6 +465,8 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 		for (; id <= spritesCount; ++id)
 		{
 			sprite = (*sprites)[id];
+			if (sprite->offset == 0) continue;
+
 			sprite->offset = file.tellp();
 
 			// writing constant transparent pixels color - magenta
@@ -480,7 +483,7 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 				writeU16(sprite->compressedDataSize);
 				if (sprite->compressedDataSize > 0)
 				{
-					file.write((char *) sprite->compressedData, sprite->compressedDataSize);
+					file.write((char *) sprite->compressedData.get(), sprite->compressedDataSize);
 				}
 			}
 			lastOffset = file.tellp();
@@ -532,3 +535,37 @@ shared_ptr <DatSprReaderWriter::DatObjectList> DatSprReaderWriter::getObjects(Da
 	}
 	return nullptr;
 }
+
+/*DatSprReaderWriter::~DatSprReaderWriter()
+{
+	shared_ptr <DatObject> object = nullptr;
+	for (auto & v : *items)
+	{
+		delete [] v->marketName;
+		delete [] v->spriteIDs;
+	}
+	for (auto & v : *creatures)
+	{
+		delete [] v->marketName;
+		delete [] v->spriteIDs;
+	}
+	for (auto & v : *effects)
+	{
+		delete [] v->marketName;
+		delete [] v->spriteIDs;
+	}
+	for (auto & v : *projectiles)
+	{
+		delete [] v->marketName;
+		delete [] v->spriteIDs;
+	}
+
+	shared_ptr <Sprite> sprite = nullptr;
+	for (auto & kv : *sprites)
+	{
+		sprite = kv.second;
+		delete [] sprite->rgb;
+		delete [] sprite->alpha;
+		delete [] sprite->compressedData;
+	}
+}*/

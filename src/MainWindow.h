@@ -92,9 +92,12 @@ private:
 	wxTextCtrl * amountOfFramesInput = nullptr;
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
 	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0;
-	wxImage * stubImage = nullptr;
+	shared_ptr <wxImage> stubImage = nullptr;
+	unique_ptr <unsigned char[]> stubImageRgb = nullptr;
+	unique_ptr <unsigned char[]> stubImageAlpha = nullptr;
 
-	std::vector <shared_ptr <wxBitmap>> importedSprites;
+	vector <shared_ptr <wxBitmap>> importedSprites;
+	vector <unique_ptr <char[]>> spriteTextIDs;
 
 	void OnCreateNewFiles(wxCommandEvent & event);
 	void OnOpenDatSprDialog(wxCommandEvent & event);
@@ -123,6 +126,8 @@ private:
 	void resizeObjectSpriteIDsArray(shared_ptr <DatObject> object);
 
 	wxDECLARE_EVENT_TABLE();
+
+	//~MainWindow();
 };
 
 #endif // _MAIN_WINDOW_H_

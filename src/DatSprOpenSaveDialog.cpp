@@ -80,16 +80,16 @@ void DatSprOpenSaveDialog::OnClickBrowseButton(wxCommandEvent & event)
 		filter = "*.spr|*.spr|All files|*";
 	}
 	int flags = (mode == MODE_OPEN ? wxFD_OPEN | wxFD_FILE_MUST_EXIST : wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-	wxFileDialog * browseDialog = new wxFileDialog(this, caption, browseDir, defaultFilename, filter, flags);
-	if (browseDialog->ShowModal() == wxID_OK)
+	wxFileDialog browseDialog(this, caption, browseDir, defaultFilename, filter, flags);
+	if (browseDialog.ShowModal() == wxID_OK)
 	{
 		if (event.GetId() == ID_BROWSE_DAT_BUTTON)
 		{
-			datPath->Replace(0, datPath->GetLastPosition(), browseDialog->GetPath());
+			datPath->Replace(0, datPath->GetLastPosition(), browseDialog.GetPath());
 		}
 		else if (event.GetId() == ID_BROWSE_SPR_BUTTON)
 		{
-			sprPath->Replace(0, sprPath->GetLastPosition(), browseDialog->GetPath());
+			sprPath->Replace(0, sprPath->GetLastPosition(), browseDialog.GetPath());
 		}
 	}
 }
