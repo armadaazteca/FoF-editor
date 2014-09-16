@@ -5,7 +5,9 @@
 #include <wx/filename.h>
 #include <wx/notebook.h>
 #include <wx/rawbmp.h>
+#include "Config.h"
 #include "Events.h"
+#include "Utils.h"
 #include "Settings.h"
 #include "MainWindow.h"
 #include "DatSprOpenSaveDialog.h"
@@ -26,6 +28,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
 	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
 	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnAnimHeightChanged)
+	EVT_TEXT(ID_FRAMES_AMOUNT_INPUT, MainWindow::OnFramesAmountChanged)
 	EVT_BUTTON(ID_DIR_TOP_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_BOTTOM_BUTTON, MainWindow::OnClickOrientationButton)
@@ -145,19 +148,22 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto widthAndHeightSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto widthLabel = new wxStaticText(animationPanel, -1, "Width:");
 	widthAndHeightSizer->Add(widthLabel, 0, wxALIGN_CENTER_VERTICAL);
-	animationWidthInput = new wxTextCtrl(animationPanel, ID_ANIM_WIDTH_INPUT, "1", wxDefaultPosition, wxSize(25, -1), wxTE_RIGHT);
+	animationWidthInput = new wxTextCtrl(animationPanel, ID_ANIM_WIDTH_INPUT, "1", wxDefaultPosition,
+	                                     wxSize(25, -1), wxTE_RIGHT);
 	widthAndHeightSizer->Add(animationWidthInput, 0, wxALL, 5);
 	auto heightLabel = new wxStaticText(animationPanel, -1, "Height:");
 	widthAndHeightSizer->Add(heightLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 10);
-	animationHeightInput = new wxTextCtrl(animationPanel, ID_ANIM_HEIGHT_INPUT, "1", wxDefaultPosition, wxSize(25, -1), wxTE_RIGHT);
+	animationHeightInput = new wxTextCtrl(animationPanel, ID_ANIM_HEIGHT_INPUT, "1", wxDefaultPosition,
+	                                      wxSize(25, -1), wxTE_RIGHT);
 	widthAndHeightSizer->Add(animationHeightInput, 0, wxALL, 5);
 	animationPanelSizer->Add(widthAndHeightSizer, 0, wxALIGN_CENTER);
 
 	// amount of frames setting
-	auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
+		auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto amountOfFramesLabel = new wxStaticText(animationPanel, -1, "Amount of frames:");
 	amountOfFramesSizer->Add(amountOfFramesLabel, 0, wxALIGN_CENTER_VERTICAL);
-	amountOfFramesInput = new wxTextCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition, wxSize(25, -1), wxTE_RIGHT);
+	amountOfFramesInput = new wxTextCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition,
+	                                     wxSize(25, -1), wxTE_RIGHT);
 	amountOfFramesSizer->Add(amountOfFramesInput, 0, wxALL, 5);
 	animationPanelSizer->Add(amountOfFramesSizer, 0, wxALIGN_CENTER);
 
@@ -311,6 +317,7 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 		attrsPanel->Enable();
 	}
 	setAttributeValues();
+	buildAnimationSpriteHolders();
 	fillObjectSprites();
 	fillAnimationSection();
 }
@@ -617,12 +624,12 @@ void MainWindow::fillAnimationSection()
 {
 	if (!selectedObject) return;
 
-	animationWidthInput->SetValue(wxString::Format("%i", selectedObject->width));
-	animationHeightInput->SetValue(wxString::Format("%i", selectedObject->height));
+	animationWidthInput->ChangeValue(wxString::Format("%i", selectedObject->width));
+	animationHeightInput->ChangeValue(wxString::Format("%i", selectedObject->height));
 
 	currentFrame = currentXDiv = currentYDiv = 0;
 	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
-	amountOfFramesInput->SetValue(wxString::Format("%i", selectedObject->phasesCount));
+	amountOfFramesInput->ChangeValue(wxString::Format("%i", selectedObject->phasesCount));
 
 	alwaysAnimatedCheckbox->SetValue(selectedObject->isAlwaysAnimated);
 
@@ -727,22 +734,44 @@ void MainWindow::fillAnimationSprites()
 
 void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
 {
-	if (animationWidthInput)
-	{
-		selectedObject->width = wxAtoi(animationWidthInput->GetValue());
-		buildAnimationSpriteHolders();
-		fillAnimationSprites();
-	}
+	if (!animationWidthInput) return;
+	wxString strval = animationWidthInput->GetValue();
+	if (strval.Length() == 0) return;
+	unsigned int val = wxAtoi(strval);
+	if (val <= 1) val = 1;
+	else if (val > Config::MAX_OBJECT_WIDTH) val = Config::MAX_OBJECT_WIDTH;
+	animationWidthInput->ChangeValue(wxString::Format("%i", val));
+	selectedObject->width = val;
+	buildAnimationSpriteHolders();
+	fillAnimationSprites();
 }
 
 void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
 {
-	if (animationHeightInput)
-	{
-		selectedObject->height = wxAtoi(animationHeightInput->GetValue());
-		buildAnimationSpriteHolders();
-		fillAnimationSprites();
-	}
+	if (!animationHeightInput) return;
+	wxString strval = animationHeightInput->GetValue();
+	if (strval.Length() == 0) return;
+	unsigned int val = wxAtoi(strval);
+	if (val <= 1) val = 1;
+	else if (val > Config::MAX_OBJECT_HEIGHT) val = Config::MAX_OBJECT_HEIGHT;
+	animationHeightInput->ChangeValue(wxString::Format("%i", val));
+	selectedObject->height = val;
+	buildAnimationSpriteHolders();
+	fillAnimationSprites();
+}
+
+void MainWindow::OnFramesAmountChanged(wxCommandEvent & event)
+{
+	if (!amountOfFramesInput) return;
+	wxString strval = amountOfFramesInput->GetValue();
+	if (strval.Length() == 0) return;
+	unsigned int val = wxAtoi(strval);
+	if (val <= 1) val = 1;
+	else if (val > Config::MAX_ANIM_FRAMES) val = Config::MAX_ANIM_FRAMES;
+	amountOfFramesInput->ChangeValue(wxString::Format("%i", val));
+	selectedObject->phasesCount = val;
+	buildAnimationSpriteHolders();
+	fillAnimationSprites();
 }
 
 void MainWindow::OnClickOrientationButton(wxCommandEvent & event)

@@ -33,7 +33,6 @@ public:
 private:
 	bool hasData = false;
 	fstream file;
-	char buffer[8192];
 	unsigned int datSignature = 0, sprSignature = 0;
 	unsigned short itemsCount = 0, creaturesCount = 0, effectsCount = 0, projectilesCount = 0;
 	shared_ptr <DatObjectList> items = nullptr, creatures = nullptr, effects = nullptr, projectiles = nullptr;

@@ -95,6 +95,7 @@ private:
 	shared_ptr <wxImage> stubImage = nullptr;
 	unique_ptr <unsigned char[]> stubImageRgb = nullptr;
 	unique_ptr <unsigned char[]> stubImageAlpha = nullptr;
+	int animationWidth = 0, animationHeight = 0, amountOfFrames = 0;
 
 	vector <shared_ptr <wxBitmap>> importedSprites;
 	vector <unique_ptr <char[]>> spriteTextIDs;
@@ -107,6 +108,7 @@ private:
 	void OnToggleAttrCheckbox(wxCommandEvent & event);
 	void OnAnimWidthChanged(wxCommandEvent & event);
 	void OnAnimHeightChanged(wxCommandEvent & event);
+	void OnFramesAmountChanged(wxCommandEvent & event);
 	void OnClickOrientationButton(wxCommandEvent & event);
 	void OnClickPrevFrameButton(wxCommandEvent & event);
 	void OnClickNextFrameButton(wxCommandEvent & event);

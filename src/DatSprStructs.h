@@ -1,5 +1,5 @@
-#ifndef _DAT_STRUCTS_H_
-#define _DAT_STRUCTS_H_
+#ifndef _DAT_SPR_STRUCTS_H_
+#define _DAT_SPR_STRUCTS_H_
 
 #include <memory>
 
@@ -52,15 +52,6 @@ enum DatObjectAttr : unsigned char
 	AttrCloth = 32,
 	AttrMarket = 33,
 	AttrUsable = 34,
-
-	// TODO: maybe remove later
-	/* additional
-	AttrOpacity = 100,
-	AttrNotPreWalkable = 101,
-
-	AttrNoMoveAnimation = 253, // real value is 16, but we need to do this for backwards compatibility
-	*/
-
 	AttrLast = 255
 };
 
@@ -112,4 +103,4 @@ struct Sprite
 	unique_ptr <unsigned char[]> compressedData = nullptr;
 };
 
-#endif // _DAT_STRUCTS_H_
+#endif // _DAT_SPR_STRUCTS_H_
