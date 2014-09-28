@@ -16,10 +16,32 @@ public:
 
 	MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size);
 
+	class EditorSpriteIDs : public wxCustomDataObject
+	{
+	public:
+		enum Type { EXISTING = 0, IMPORTED = 1 };
+		inline Type getType() { return type; }
+		inline void setType(Type type) { this->type = type; }
+		inline vector <unsigned int> & getSpriteIDs() { return spriteIDs; }
+		inline unsigned int getIndexInVector() { return indexInVector; }
+		inline void setIndexInVector(unsigned int index) { indexInVector = index; }
+		inline unsigned int getBigSpriteWidth() { return bigSpriteWidth; }
+		inline unsigned int getBigSpriteHeight() { return bigSpriteHeight; }
+		inline void setBigSpriteSize(unsigned int width, unsigned int height)
+		{
+			bigSpriteWidth = width;
+			bigSpriteHeight = height;
+		}
+	private:
+		Type type = EXISTING;
+		vector <unsigned int> spriteIDs;
+		unsigned int indexInVector = 0;
+		unsigned int bigSpriteWidth = 1, bigSpriteHeight = 1;
+	};
+
 	class AnimationSpriteDropTarget : public wxTextDropTarget
 	{
 	public:
-
 		virtual bool OnDropText(wxCoord x, wxCoord y, const wxString & data);
 		virtual wxDragResult OnEnter(wxCoord x, wxCoord y, wxDragResult defResult);
 		virtual void OnLeave();
@@ -98,7 +120,7 @@ private:
 	int animationWidth = 0, animationHeight = 0, amountOfFrames = 0;
 
 	vector <shared_ptr <wxBitmap>> importedSprites;
-	vector <unique_ptr <char[]>> spriteTextIDs;
+	vector <EditorSpriteIDs *> editorSpriteIDs;
 
 	void OnCreateNewFiles(wxCommandEvent & event);
 	void OnOpenDatSprDialog(wxCommandEvent & event);
@@ -129,7 +151,7 @@ private:
 
 	wxDECLARE_EVENT_TABLE();
 
-	//~MainWindow();
+	~MainWindow();
 };
 
 #endif // _MAIN_WINDOW_H_

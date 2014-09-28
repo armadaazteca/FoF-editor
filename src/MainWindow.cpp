@@ -595,11 +595,12 @@ void MainWindow::fillObjectSprites()
 				wxBitmap bitmap(image);
 				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, -1, bitmap);
 
-				// writing bitmap (id) into object client data
-				char * buf = new char[10];
-				sprintf(buf, "e%d", sprite->id); // first "e" char is for indicating that it's "existing" sprite
-				staticBitmap->SetClientData(buf);
-				spriteTextIDs.push_back(unique_ptr <char[]> (buf)); // to be properly deleted later
+				auto esi = new EditorSpriteIDs();
+				esi->setType(EditorSpriteIDs::EXISTING);
+				esi->getSpriteIDs().push_back(sprite->id);
+				esi->setIndexInVector(editorSpriteIDs.size());
+				editorSpriteIDs.push_back(esi);
+				staticBitmap->SetClientData(esi);
 
 				staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
 
@@ -742,6 +743,7 @@ void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
 	else if (val > Config::MAX_OBJECT_WIDTH) val = Config::MAX_OBJECT_WIDTH;
 	animationWidthInput->ChangeValue(wxString::Format("%i", val));
 	selectedObject->width = val;
+	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
 }
@@ -756,6 +758,7 @@ void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
 	else if (val > Config::MAX_OBJECT_HEIGHT) val = Config::MAX_OBJECT_HEIGHT;
 	animationHeightInput->ChangeValue(wxString::Format("%i", val));
 	selectedObject->height = val;
+	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
 }
@@ -770,6 +773,7 @@ void MainWindow::OnFramesAmountChanged(wxCommandEvent & event)
 	else if (val > Config::MAX_ANIM_FRAMES) val = Config::MAX_ANIM_FRAMES;
 	amountOfFramesInput->ChangeValue(wxString::Format("%i", val));
 	selectedObject->phasesCount = val;
+	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
 }
@@ -877,6 +881,7 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	attrsPanel->Enable();
 
 	setAttributeValues();
+	buildAnimationSpriteHolders();
 	fillObjectSprites();
 	fillAnimationSection();
 }
@@ -907,10 +912,12 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 			importedSprites.push_back(bitmap);
 			staticBitmap = new wxGenericStaticBitmap(newSpritesPanel, -1, *bitmap);
 
-			// writing bitmap index (id) into object client data
-			char * buf = new char[10];
-			sprintf(buf, "i%d", bitmapId); // first "i" char is for indicating that it's "imported" sprite
-			staticBitmap->SetClientData(buf);
+			auto esi = new EditorSpriteIDs();
+			esi->setType(EditorSpriteIDs::IMPORTED);
+			esi->getSpriteIDs().push_back(bitmapId);
+			esi->setIndexInVector(editorSpriteIDs.size());
+			editorSpriteIDs.push_back(esi);
+			staticBitmap->SetClientData(esi);
 
 			staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
 
@@ -927,9 +934,11 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 void MainWindow::OnClickImportedOrObjectSprite(wxMouseEvent & event)
 {
 	auto staticBitmap = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
-	char * buf = (char *) staticBitmap->GetClientData();
-	wxTextDataObject data(buf);
 	wxDropSource dragSource(staticBitmap);
+	auto esi = (EditorSpriteIDs *) staticBitmap->GetClientData();
+	char strEsiIndex[5];
+	sprintf(strEsiIndex, "%i", esi->getIndexInVector());
+	wxTextDataObject data(strEsiIndex);
 	dragSource.SetData(data);
 	dragSource.DoDragDrop(true);
 }
@@ -990,61 +999,151 @@ void MainWindow::OnAbout(wxCommandEvent & event)
 	wxMessageBox("Here will be some about text", "About", wxOK | wxICON_INFORMATION);
 }
 
+MainWindow::~MainWindow()
+{
+	for (auto esi : editorSpriteIDs)
+	{
+		delete esi;
+	}
+}
+
 bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, const wxString & data)
 {
 	bool result = false;
-	const char * charData = data.c_str();
-	int spriteId = wxAtoi(data.substr(1));
-	unsigned int frameSize = mainWindow->selectedObject->width * mainWindow->selectedObject->height;
-	unsigned int spriteIdIndex = (mainWindow->currentXDiv + mainWindow->currentFrame * mainWindow->selectedObject->patternWidth)
-	                           * frameSize + (frameSize - 1 - spriteHolderIndex);
-	if (charData[0] == 'i') // imported sprite
+
+	unsigned int esiIndexInVector = wxAtoi(data);
+	auto esi = mainWindow->editorSpriteIDs[esiIndexInVector];
+	auto obj = mainWindow->selectedObject;
+	unsigned int frameSize = obj->width * obj->height;
+	unsigned int spriteIdStartIndex = (mainWindow->currentXDiv + mainWindow->currentFrame
+	                                * obj->patternWidth) * frameSize + (frameSize - 1 - spriteHolderIndex);
+
+	if (esi->getType() == EditorSpriteIDs::IMPORTED) // imported sprite
 	{
 		auto sprites = DatSprReaderWriter::getInstance().getSprites();
-		auto sprite = make_shared <Sprite> ();
-		sprite->id = DatSprReaderWriter::getInstance().incrementMaxSpriteId();
-		sprite->rgb = unique_ptr <unsigned char[]> (new unsigned char[Sprite::RGB_SIZE]);
-		sprite->alpha = unique_ptr <unsigned char[]> (new unsigned char[Sprite::ALPHA_SIZE]);
-		auto bitmap = mainWindow->importedSprites[spriteId];
+		auto & esiSpriteIDs = esi->getSpriteIDs();
+		auto bitmap = mainWindow->importedSprites[esiSpriteIDs[0]];
 		auto image = bitmap->ConvertToImage();
-		if (image.HasAlpha())
+
+		void * pdp = nullptr; // pixel data pointer
+		bool hasAlpha = image.HasAlpha();
+		if (hasAlpha)
 		{
-			wxAlphaPixelData pixelData(*bitmap);
-			auto it = pixelData.GetPixels();
-			for (int i = 0, j = 0; i < Sprite::RGB_SIZE; i += 3, ++j)
-			{
-				sprite->rgb[i] = it.Red();
-				sprite->rgb[i + 1] = it.Green();
-				sprite->rgb[i + 2] = it.Blue();
-				sprite->alpha[j] = it.Alpha();
-				++it;
-			};
+			pdp = new wxAlphaPixelData(*bitmap);
 		}
 		else
 		{
-			wxNativePixelData pixelData(*bitmap);
-			auto it = pixelData.GetPixels();
-			for (int i = 0, j = 0; i < Sprite::RGB_SIZE; i += 3, ++j)
-			{
-				sprite->rgb[i] = it.Red();
-				sprite->rgb[i + 1] = it.Green();
-				sprite->rgb[i + 2] = it.Blue();
-				sprite->alpha[j] = 255;
-				++it;
-			};
+			pdp = new wxNativePixelData(*bitmap);
 		}
-		sprite->valid = true;
-		(*sprites)[sprite->id] = sprite;
-		mainWindow->selectedObject->spriteIDs[spriteIdIndex] = sprite->id;
+
+		int width = ceil(bitmap->GetWidth() / (float) Config::SPRITE_SIZE);
+		int height = ceil(bitmap->GetHeight() / (float) Config::SPRITE_SIZE);
+		esi->setType(MainWindow::EditorSpriteIDs::EXISTING);
+		esi->setBigSpriteSize(width, height);
+		esiSpriteIDs.clear();
+		for (int h = 0; h < height; ++h)
+		{
+			for (int w = 0; w < width; ++w)
+			{
+				auto sprite = make_shared <Sprite> ();
+				sprite->id = DatSprReaderWriter::getInstance().incrementMaxSpriteId();
+				sprite->rgb = unique_ptr <unsigned char[]> (new unsigned char[Sprite::RGB_SIZE]);
+				sprite->alpha = unique_ptr <unsigned char[]> (new unsigned char[Sprite::ALPHA_SIZE]);
+
+				if (hasAlpha)
+				{
+					wxAlphaPixelData * apdp = (wxAlphaPixelData *) pdp;
+					auto it = apdp->GetPixels();
+					int x = w * Config::SPRITE_SIZE;
+					int y = h * Config::SPRITE_SIZE;
+					it.MoveTo(*apdp, x, y);
+					for (int oy = 0; oy < Config::SPRITE_SIZE; ++oy)
+					{
+						it.MoveTo(*apdp, x, y + oy);
+						int dataStart = Config::SPRITE_SIZE * oy, dataEnd = dataStart + Config::SPRITE_SIZE;
+						for (int i = dataStart * 3, j = dataStart; j < dataEnd; i += 3, ++j)
+						{
+							assert(i < Sprite::RGB_SIZE);
+							assert(j < Sprite::ALPHA_SIZE);
+							sprite->rgb[i] = it.Red();
+							sprite->rgb[i + 1] = it.Green();
+							sprite->rgb[i + 2] = it.Blue();
+							sprite->alpha[j] = it.Alpha();
+							++it;
+						}
+					}
+				}
+				else
+				{
+					wxNativePixelData * npdp = (wxNativePixelData *) pdp;
+					auto it = npdp->GetPixels();
+					int x = w * Config::SPRITE_SIZE;
+					int y = h * Config::SPRITE_SIZE;
+					it.MoveTo(*npdp, x, y);
+					for (int oy = 0; oy < Config::SPRITE_SIZE; ++oy)
+					{
+						it.MoveTo(*npdp, x, y + oy);
+						int dataStart = Config::SPRITE_SIZE * oy, dataEnd = dataStart + Config::SPRITE_SIZE;
+						for (int i = dataStart * 3, j = dataStart; j < dataEnd; i += 3, ++j)
+						{
+							assert(i < Sprite::RGB_SIZE);
+							assert(j < Sprite::ALPHA_SIZE);
+							sprite->rgb[i] = it.Red();
+							sprite->rgb[i + 1] = it.Green();
+							sprite->rgb[i + 2] = it.Blue();
+							sprite->alpha[j] = 255;
+							++it;
+						}
+					}
+				}
+
+				sprite->valid = true;
+				(*sprites)[sprite->id] = sprite;
+				unsigned int spriteIndex = spriteIdStartIndex - h * obj->width - w;
+				if (spriteIndex >= 0 && spriteIndex < obj->spriteCount)
+				{
+					obj->spriteIDs[spriteIndex] = sprite->id;
+				}
+
+				esiSpriteIDs.push_back(sprite->id);
+			}
+		}
+
+		if (hasAlpha)
+		{
+			wxAlphaPixelData * apdp = (wxAlphaPixelData *) pdp;
+			delete apdp;
+		}
+		else
+		{
+			wxNativePixelData * npdp = (wxNativePixelData *) pdp;
+			delete npdp;
+		}
+
 		mainWindow->fillObjectSprites();
 		mainWindow->fillAnimationSprites();
+
 		result = true;
 	}
-	else if (charData[0] == 'e') // existing sprite
+	else if (esi->getType() == EditorSpriteIDs::EXISTING) // existing sprite
 	{
-		mainWindow->selectedObject->spriteIDs[spriteIdIndex] = spriteId;
+		auto esiSpriteIDs = esi->getSpriteIDs();
+		unsigned int spriteID = 0;
+		int width = esi->getBigSpriteWidth(), height = esi->getBigSpriteHeight();
+		for (int h = 0; h < height; ++h)
+		{
+			for (int w = 0; w < width; ++w)
+			{
+				unsigned int spriteIndex = spriteIdStartIndex - h * obj->width - w;
+				if (spriteIndex >= 0 && spriteIndex < obj->spriteCount)
+				{
+					obj->spriteIDs[spriteIndex] = esiSpriteIDs[spriteID++];
+				}
+			}
+		}
 		mainWindow->fillObjectSprites();
 		mainWindow->fillAnimationSprites();
+
 		result = true;
 	}
 

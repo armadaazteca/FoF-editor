@@ -4,6 +4,7 @@
 class Config
 {
 public:
+	static const int SPRITE_SIZE = 32;
 	static const int MAX_OBJECT_WIDTH = 4;
 	static const int MAX_OBJECT_HEIGHT = 4;
 	static const int MAX_ANIM_FRAMES = 8;

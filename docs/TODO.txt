@@ -1,8 +1,8 @@
-- animation width & height validator
 - saving files (don't forget to save alpha channel of sprites)
+- adjust attributes set and implement new attributes
 - validate image file types when importing sprites
-- drag big sprites and fill cells automatically
 - don't forget about 'always animated' checkbox
 - deal with exception related to sprite shared_ptr destruction
 - make some messages in status bar
-- don't create new sprite on every imported sprite drag & drop
+- write about text
+- clear sprite cell by right-click
