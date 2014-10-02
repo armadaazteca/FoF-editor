@@ -293,14 +293,48 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 {
+	// TODO: confirmation of unsaved previous changes required here
+	categoryComboBox->SetSelection(0);
+	objectsListBox->Clear();
+	animationSpritesPanel->DestroyChildren();
+	animationSpritesPanel->Destroy();
+	animationSpritesPanel = nullptr;
+	animationMainGridSizer->Insert(4, 32, 32);
+	objectSpritesPanelSizer->Clear(true);
+	newSpritesPanelSizer->Clear(true);
+
+	mainPanel->Disable();
+	animationPanel->Disable();
+	attrsPanel->Disable();
+
 	DatSprReaderWriter::getInstance().initNewData();
 	mainPanel->Enable();
 }
 
 void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
 {
-	DatSprOpenSaveDialog dialog(this,
-			(event.GetId() == wxID_OPEN ? DatSprOpenSaveDialog::MODE_OPEN : DatSprOpenSaveDialog::MODE_SAVE));
+	// TODO: confirmation of unsaved previous changes required here
+	bool isModeOpen = event.GetId() == wxID_OPEN;
+	auto & dsrw = DatSprReaderWriter::getInstance();
+	if (!isModeOpen)
+	{
+		bool hasObjects = false;
+		for (int cat = CategoryItem; cat < InvalidCategory; ++cat)
+		{
+			auto objects = dsrw.getObjects((DatObjectCategory) cat);
+			if (objects && objects->size() > 0)
+			{
+				hasObjects = true;
+				break;
+			}
+		}
+		if (!hasObjects)
+		{
+			wxMessageBox("There are no objects to save", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+	}
+	DatSprOpenSaveDialog dialog(this, (isModeOpen ? DatSprOpenSaveDialog::MODE_OPEN : DatSprOpenSaveDialog::MODE_SAVE));
 	dialog.ShowModal();
 }
 
@@ -387,12 +421,17 @@ void MainWindow::OnObjectSelected(wxCommandEvent & event)
 	fillAnimationSection();
 }
 
-void MainWindow::setAttributeValues()
+void MainWindow::setAttributeValues(bool isNewObject)
 {
 	// at first, resetting attributes to default
 	for (int i = ID_ATTR_IS_GROUND_BORDER; i < ID_ATTR_LAST; ++i)
 	{
 		attrCheckboxes[i]->SetValue(false);
+	}
+	if (isNewObject)
+	{
+		memset(selectedObject->allAttrs, 0, AttrLast);
+		selectedObject->allAttrs[AttrLast] = AttrLast;
 	}
 
 	if (!selectedObject) return;
@@ -401,94 +440,186 @@ void MainWindow::setAttributeValues()
 	if (selectedObject->isGroundBorder)
 	{
 		attrCheckboxes[ID_ATTR_IS_GROUND_BORDER]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrGroundBorder] = AttrGroundBorder;
+		}
 	}
 	if (selectedObject->isOnTop)
 	{
 		attrCheckboxes[ID_ATTR_IS_ON_TOP]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrOnTop] = AttrOnTop;
+		}
 	}
 	if (selectedObject->isContainer)
 	{
 		attrCheckboxes[ID_ATTR_IS_CONTAINER]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrContainer] = AttrContainer;
+		}
 	}
 	if (selectedObject->isStackable)
 	{
 		attrCheckboxes[ID_ATTR_IS_STACKABLE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrStackable] = AttrStackable;
+		}
 	}
 	if (selectedObject->isForceUse)
 	{
 		attrCheckboxes[ID_ATTR_IS_FORCE_USE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrForceUse] = AttrForceUse;
+		}
 	}
 	if (selectedObject->isMultiUse)
 	{
 		attrCheckboxes[ID_ATTR_IS_MULTI_USE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrMultiUse] = AttrMultiUse;
+		}
 	}
 	if (selectedObject->isFluidContainer)
 	{
 		attrCheckboxes[ID_ATTR_IS_FLUID_CONTAINER]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrFluidContainer] = AttrFluidContainer;
+		}
 	}
 	if (selectedObject->isSplash)
 	{
 		attrCheckboxes[ID_ATTR_IS_SPLASH]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrSplash] = AttrSplash;
+		}
 	}
 	if (selectedObject->blocksProjectiles)
 	{
 		attrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrBlockProjectile] = AttrBlockProjectile;
+		}
 	}
 	if (selectedObject->isPickupable)
 	{
 		attrCheckboxes[ID_ATTR_IS_PICKUPABLE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrPickupable] = AttrPickupable;
+		}
 	}
 	if (selectedObject->isWalkable)
 	{
 		attrCheckboxes[ID_ATTR_IS_WALKABLE]->SetValue(true);
 	}
+	else if (isNewObject)
+	{
+		selectedObject->allAttrs[AttrNotWalkable] = AttrNotWalkable;
+	}
 	if (selectedObject->isMovable)
 	{
 		attrCheckboxes[ID_ATTR_IS_MOVABLE]->SetValue(true);
+	}
+	else if (isNewObject)
+	{
+		selectedObject->allAttrs[AttrNotMoveable] = AttrNotMoveable;
 	}
 	if (selectedObject->isPathable)
 	{
 		attrCheckboxes[ID_ATTR_IS_PATHABLE]->SetValue(true);
 	}
+	else if (isNewObject)
+	{
+		selectedObject->allAttrs[AttrNotPathable] = AttrNotPathable;
+	}
 	if (selectedObject->canBeHidden)
 	{
 		attrCheckboxes[ID_ATTR_CAN_BE_HIDDEN]->SetValue(true);
 	}
+	else if (isNewObject)
+	{
+		selectedObject->allAttrs[AttrDontHide] = AttrDontHide;
+	}
 	if (selectedObject->isHangable)
 	{
 		attrCheckboxes[ID_ATTR_IS_HANGABLE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrHangable] = AttrHangable;
+		}
 	}
 	if (selectedObject->isHookSouth)
 	{
 		attrCheckboxes[ID_ATTR_IS_HOOK_SOUTH]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrHookSouth] = AttrHookSouth;
+		}
 	}
 	if (selectedObject->isHookEast)
 	{
 		attrCheckboxes[ID_ATTR_IS_HOOK_EAST]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrHookEast] = AttrHookEast;
+		}
 	}
 	if (selectedObject->isRotatable)
 	{
 		attrCheckboxes[ID_ATTR_IS_ROTATABLE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrRotateable] = AttrRotateable;
+		}
 	}
 	if (selectedObject->isTranslucent)
 	{
 		attrCheckboxes[ID_ATTR_IS_TRANSLUCENT]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrTranslucent] = AttrTranslucent;
+		}
 	}
 	if (selectedObject->isLyingCorpse)
 	{
 		attrCheckboxes[ID_ATTR_IS_LYING_CORPSE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrLyingCorpse] = AttrLyingCorpse;
+		}
 	}
 	if (selectedObject->isFullGround)
 	{
 		attrCheckboxes[ID_ATTR_IS_FULL_GROUND]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrFullGround] = AttrFullGround;
+		}
 	}
 	if (selectedObject->ignoreLook)
 	{
 		attrCheckboxes[ID_ATTR_IGNORE_LOOK]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrLook] = AttrLook;
+		}
 	}
 	if (selectedObject->isUsable)
 	{
 		attrCheckboxes[ID_ATTR_IS_USABLE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrUsable] = AttrUsable;
+		}
 	}
 }
 
@@ -872,6 +1003,7 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	newObject->patternWidth = newObject->patternHeight = newObject->patternDepth = 1;
 	newObject->layersCount = newObject->phasesCount = newObject->spriteCount = 1;
 	newObject->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[1] { 0 });
+	newObject->allAttrs[AttrLast] = AttrLast;
 	objects->push_back(newObject);
 	selectedObject = newObject;
 	objectsListBox->Insert(wxString::Format("%i", newObject->id), objectsListBox->GetCount());
@@ -1052,6 +1184,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 
 				if (hasAlpha)
 				{
+					sprite->hasRealAlpha = true;
 					wxAlphaPixelData * apdp = (wxAlphaPixelData *) pdp;
 					auto it = apdp->GetPixels();
 					int x = w * Config::SPRITE_SIZE;
@@ -1097,7 +1230,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 					}
 				}
 
-				sprite->valid = true;
+				sprite->valid = sprite->changed = true;
 				(*sprites)[sprite->id] = sprite;
 				unsigned int spriteIndex = spriteIdStartIndex - h * obj->width - w;
 				if (spriteIndex >= 0 && spriteIndex < obj->spriteCount)

@@ -95,8 +95,8 @@ struct Sprite
 {
 	// 1024 pixels, 3 bytes per rgb pixel, 1 byte for alpha channel
 	static const unsigned short RGB_SIZE = 3072, ALPHA_SIZE = 1024;
-	bool valid = false, changed = false;
-	unsigned int id = 0, offset = 0;
+	bool valid = false, changed = false, hasRealAlpha = false;
+	unsigned int id = 0, offset = 0, offsetAlpha = 0;
 	unique_ptr <unsigned char[]> rgb = nullptr;
 	unique_ptr <unsigned char[]> alpha = nullptr;
 	unsigned short compressedDataSize = 0;

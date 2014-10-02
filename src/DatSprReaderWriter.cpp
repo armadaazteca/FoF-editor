@@ -259,6 +259,7 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 			if (sprite->offset != 0)
 			{
 				file.seekg(sprite->offset + 3); // +3 to skip transparent pixels color
+
 				unsigned short pixelDataSize = readU16();
 				if (pixelDataSize == 0) continue;
 				sprite->compressedDataSize = pixelDataSize;
@@ -318,6 +319,34 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 		return false;
 	}
 	hasData = true;
+	return true;
+}
+
+bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable)
+{
+	file.open(filename.mb_str(), ios::in | ios::binary);
+	if (file.is_open())
+	{
+		readU32(); // skipping signature
+		unsigned int spritesCount = readU32();
+		unsigned int id = 0, readings = 0;
+		int currentOffset = 0;
+		shared_ptr <Sprite> sprite = nullptr;
+		for (unsigned int i = 0; i < spritesCount; ++i)
+		{
+			id = readU32();
+			sprite = (*sprites)[id];
+			sprite->offsetAlpha = readU32();
+			currentOffset = file.tellg();
+			file.seekg(sprite->offsetAlpha);
+			file.read((char *) sprite->alpha.get(), Sprite::ALPHA_SIZE);
+			file.seekg(currentOffset);
+
+			progressUpdatable->updateProgress(++readings / (double) spritesCount);
+		}
+
+		file.close();
+	}
 	return true;
 }
 
@@ -455,28 +484,67 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 		unsigned int spritesCount = sprites->size();
 		writeU32(spritesCount);
 
-		int begOffset = 8; // offset where sprite offsets writing begins
+		int begOffset = 8, lastOffset = 0; // offset where sprite offsets writing begins
 		file.seekp(begOffset + spritesCount * 4); // skipping space required for writing sprite offsets
 
 		shared_ptr <Sprite> sprite = nullptr;
-		unsigned int id = 1;
-		int lastOffset = 0;
 		unsigned int writings = 0;
-		for (; id <= spritesCount; ++id)
+		unsigned char * rgb = nullptr, * alpha = nullptr;
+		for (unsigned int id = 1; id <= spritesCount; ++id)
 		{
 			sprite = (*sprites)[id];
-			if (sprite->offset == 0) continue;
+			if (sprite->offset == 0 && !sprite->changed) continue;
 
 			sprite->offset = file.tellp();
 
-			// writing constant transparent pixels color - magenta
+			// writing transparent pixels color - magenta
 			writeByte(255);
 			writeByte(0);
 			writeByte(255);
 
 			if (sprite->changed) // recompressing sprite pixel data
 			{
+				rgb = sprite->rgb.get();
+				alpha = sprite->alpha.get();
 
+				int dataSizeOffset = file.tellp(), pixelsCountOffset = 0, currentOffset = 0;
+				writeU16(0); // this is placeholder for now, after compressing data get back to it and write data size
+				unsigned short dataSize = 0, transparentPixels = 0, coloredPixels = 0;
+				unsigned short alphaReadPos = 0, rgbReadPos = 0;
+
+				while (alphaReadPos < Sprite::ALPHA_SIZE)
+				{
+					transparentPixels = 0;
+					coloredPixels = 0;
+					pixelsCountOffset = file.tellp();
+					writeU32(0); // also placeholder for two shorts
+					while (alphaReadPos < Sprite::ALPHA_SIZE && alpha[alphaReadPos] == 0)
+					{
+						alphaReadPos++;
+						transparentPixels++;
+					}
+					rgbReadPos = alphaReadPos * 3;
+					while (alphaReadPos < Sprite::ALPHA_SIZE && alpha[alphaReadPos] != 0)
+					{
+						writeByte(rgb[rgbReadPos++]);
+						writeByte(rgb[rgbReadPos++]);
+						writeByte(rgb[rgbReadPos++]);
+						dataSize += 3;
+						alphaReadPos++;
+						coloredPixels++;
+					}
+					currentOffset = file.tellp();
+					file.seekp(pixelsCountOffset);
+					writeU16(transparentPixels);
+					writeU16(coloredPixels);
+					dataSize += 4;
+					file.seekp(currentOffset);
+				}
+
+				currentOffset = file.tellp();
+				file.seekp(dataSizeOffset);
+				writeU16(dataSize);
+				file.seekp(currentOffset);
 			}
 			else // writing already existing compressed data
 			{
@@ -490,6 +558,54 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 			file.seekp(begOffset + (id - 1) * 4); // moving to the beginning to write sprite offset
 			writeU32(sprite->offset);
 			file.seekp(lastOffset); // moving back
+
+			if (file.bad()) return false;
+
+			progressUpdatable->updateProgress(++writings / (double) spritesCount);
+		}
+
+		file.close();
+	}
+	return true;
+}
+
+bool DatSprReaderWriter::writeAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable)
+{
+	file.open(filename.mb_str(), ios::out | ios::binary | ios::trunc);
+	if (file.is_open())
+	{
+		writeU32(sprSignature);
+
+		unsigned int spritesCount = sprites->size();
+		shared_ptr <Sprite> sprite = nullptr;
+		vector <shared_ptr <Sprite>> spritesWithAlpha;
+		spritesWithAlpha.reserve(100); // just for better perfomance
+		for (unsigned int id = 1; id <= spritesCount; ++id)
+		{
+			sprite = (*sprites)[id];
+			if (sprite->hasRealAlpha)
+			{
+				spritesWithAlpha.push_back(sprite);
+			}
+		}
+		spritesCount = spritesWithAlpha.size();
+		writeU32(spritesCount);
+
+		int begOffset = 8, lastOffset = 0;
+		file.seekp(begOffset + spritesCount * 8); // skipping space required for writing sprite IDs and offsets
+
+		unsigned int writings = 0;
+		unsigned int i = 0;
+		for (auto & sprite : spritesWithAlpha)
+		{
+			sprite->offsetAlpha = file.tellp();
+			file.write((char *) sprite->alpha.get(), Sprite::ALPHA_SIZE);
+			lastOffset = file.tellp();
+			file.seekp(begOffset + i * 8); // moving to the beginning to write sprite id and sprite offset
+			writeU32(sprite->id);
+			writeU32(sprite->offsetAlpha);
+			file.seekp(lastOffset); // moving back
+			i++;
 
 			if (file.bad()) return false;
 

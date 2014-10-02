@@ -1,8 +1,12 @@
-- saving files (don't forget to save alpha channel of sprites)
 - adjust attributes set and implement new attributes
+- handle attribute checkboxes values changes
+- implement support for 8-direction sprites
+- wheel-scrolling for objects listbox
 - validate image file types when importing sprites
+- warning message box when closing editor with unsaved changes
 - don't forget about 'always animated' checkbox
 - deal with exception related to sprite shared_ptr destruction
 - make some messages in status bar
 - write about text
 - clear sprite cell by right-click
+- possibility to export particular 32x32 sprites or full composed picture into png

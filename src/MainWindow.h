@@ -140,7 +140,7 @@ private:
 	void OnExit(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();
-	void setAttributeValues();
+	void setAttributeValues(bool isNewObject = false);
 	void fillObjectSprites();
 	void fillAnimationSection();
 	void fillAnimationSprites();
