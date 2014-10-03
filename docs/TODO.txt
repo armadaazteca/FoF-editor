@@ -3,6 +3,7 @@
 - implement support for 8-direction sprites
 - wheel-scrolling for objects listbox
 - validate image file types when importing sprites
+- validate imported sprite dimensions
 - warning message box when closing editor with unsaved changes
 - don't forget about 'always animated' checkbox
 - deal with exception related to sprite shared_ptr destruction

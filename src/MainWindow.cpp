@@ -1,3 +1,4 @@
+#include <math.h>
 #include <wx/wxprec.h>
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
@@ -29,10 +30,14 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
 	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnAnimHeightChanged)
 	EVT_TEXT(ID_FRAMES_AMOUNT_INPUT, MainWindow::OnFramesAmountChanged)
+	EVT_BUTTON(ID_DIR_TOP_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_TOP_BUTTON, MainWindow::OnClickOrientationButton)
-	EVT_BUTTON(ID_DIR_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
-	EVT_BUTTON(ID_DIR_BOTTOM_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_TOP_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_BOTTOM_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_BOTTOM_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_BUTTON(ID_DIR_BOTTOM_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_PREV_FRAME_BUTTON, MainWindow::OnClickPrevFrameButton)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
@@ -85,36 +90,58 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	animationPanelSizer = new wxBoxSizer(wxVERTICAL);
 
 	wxImage arrowIconImage("res/icons/green_arrow_left.png", wxBITMAP_TYPE_PNG);
+	wxImage arrowIconDiagonalImage("res/icons/green_arrow_top_left.png", wxBITMAP_TYPE_PNG);
 	animationMainGridSizer = new wxFlexGridSizer(3, 3, 5, 5);
 
-	animationMainGridSizer->Add(32, 32);
+	auto dirTopLeftButton = new wxButton(animationPanel, ID_DIR_TOP_LEFT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	wxBitmap dirTopLeftButtonIcon(arrowIconDiagonalImage);
+	dirTopLeftButton->SetBitmap(dirTopLeftButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirTopLeftButton, 0, wxALIGN_CENTER);
+
 	auto dirTopButton = new wxButton(animationPanel, ID_DIR_TOP_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate90();
 	wxBitmap dirTopButtonIcon(arrowIconImage);
 	dirTopButton->SetBitmap(dirTopButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirTopButton, 0, wxALIGN_CENTER);
 
-	animationMainGridSizer->Add(32, 32);
+	auto dirTopRightButton = new wxButton(animationPanel, ID_DIR_TOP_RIGHT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconDiagonalImage = arrowIconDiagonalImage.Rotate90();
+	wxBitmap dirTopRightButtonIcon(arrowIconDiagonalImage);
+	dirTopRightButton->SetBitmap(dirTopRightButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirTopRightButton, 0, wxALIGN_CENTER);
+
 	auto dirLeftButton = new wxButton(animationPanel, ID_DIR_LEFT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate90(false);
 	wxBitmap dirLeftButtonIcon(arrowIconImage);
 	dirLeftButton->SetBitmap(dirLeftButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirLeftButton, 0, wxALIGN_CENTER);
 
-	animationMainGridSizer->Add(32, 32);
+	animationMainGridSizer->Add(32, 32); // placeholder for sprite holders
+
 	auto dirRightButton = new wxButton(animationPanel, ID_DIR_RIGHT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate180();
 	wxBitmap dirRightButtonIcon(arrowIconImage);
 	dirRightButton->SetBitmap(dirRightButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirRightButton, 0, wxALIGN_CENTER);
 
-	animationMainGridSizer->Add(32, 32);
+	auto dirBottomLeftButton = new wxButton(animationPanel, ID_DIR_BOTTOM_LEFT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconDiagonalImage = arrowIconDiagonalImage.Rotate180();
+	wxBitmap dirBottomLeftButtonIcon(arrowIconDiagonalImage);
+	dirBottomLeftButton->SetBitmap(dirBottomLeftButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirBottomLeftButton, 0, wxALIGN_CENTER);
+
 	auto dirBottomButton = new wxButton(animationPanel, ID_DIR_BOTTOM_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate90();
 	wxBitmap dirBottomButtonIcon(arrowIconImage);
 	dirBottomButton->SetBitmap(dirBottomButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirBottomButton, 0, wxALIGN_CENTER);
-	animationMainGridSizer->Add(32, 32);
+
+	auto dirBottomRightButton = new wxButton(animationPanel, ID_DIR_BOTTOM_RIGHT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
+	arrowIconDiagonalImage = arrowIconDiagonalImage.Rotate90(false);
+	wxBitmap dirBottomRightButtonIcon(arrowIconDiagonalImage);
+	dirBottomRightButton->SetBitmap(dirBottomRightButtonIcon, wxLEFT);
+	animationMainGridSizer->Add(dirBottomRightButton, 0, wxALIGN_CENTER);
+
 	animationPanelSizer->Add(animationMainGridSizer, 0, wxALIGN_CENTER);
 
 	animationSpritesPanel = nullptr; // initializing
@@ -296,10 +323,13 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 	// TODO: confirmation of unsaved previous changes required here
 	categoryComboBox->SetSelection(0);
 	objectsListBox->Clear();
-	animationSpritesPanel->DestroyChildren();
-	animationSpritesPanel->Destroy();
-	animationSpritesPanel = nullptr;
-	animationMainGridSizer->Insert(4, 32, 32);
+	if (animationSpritesPanel)
+	{
+		animationSpritesPanel->DestroyChildren();
+		animationSpritesPanel->Destroy();
+		animationSpritesPanel = nullptr;
+		animationMainGridSizer->Insert(4, 32, 32);
+	}
 	objectSpritesPanelSizer->Clear(true);
 	newSpritesPanelSizer->Clear(true);
 
@@ -912,58 +942,50 @@ void MainWindow::OnFramesAmountChanged(wxCommandEvent & event)
 void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
 {
 	unsigned int xDiv = 0;
+
+	auto selectOrientation = [&](OrientationToXDiv orient, const char * orientName, unsigned char patternWidth)
+	{
+		if (selectedObject->patternWidth < patternWidth)
+		{
+			wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, orientName), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
+			if (confirmation.ShowModal() == wxID_YES)
+			{
+				selectedObject->patternWidth = patternWidth;
+				resizeObjectSpriteIDsArray(selectedObject);
+				xDiv = orient;
+			}
+		}
+		else
+		{
+			xDiv = orient;
+		}
+	};
+
 	switch (event.GetId())
 	{
 		case ID_DIR_TOP_BUTTON:
 			xDiv = ORIENT_NORTH;
 		break;
 		case ID_DIR_RIGHT_BUTTON:
-			if (selectedObject->patternWidth < 2)
-			{
-				wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, "east"), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
-				if (confirmation.ShowModal() == wxID_YES)
-				{
-					selectedObject->patternWidth = 2;
-					resizeObjectSpriteIDsArray(selectedObject);
-					xDiv = ORIENT_EAST;
-				}
-			}
-			else
-			{
-				xDiv = ORIENT_EAST;
-			}
+			selectOrientation(ORIENT_EAST, "east", 2);
 		break;
 		case ID_DIR_BOTTOM_BUTTON:
-			if (selectedObject->patternWidth < 3)
-			{
-				wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, "south"), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
-				if (confirmation.ShowModal() == wxID_YES)
-				{
-					selectedObject->patternWidth = 3;
-					resizeObjectSpriteIDsArray(selectedObject);
-					xDiv = ORIENT_SOUTH;
-				}
-			}
-			else
-			{
-				xDiv = ORIENT_SOUTH;
-			}
+			selectOrientation(ORIENT_SOUTH, "south", 3);
 		break;
 		case ID_DIR_LEFT_BUTTON:
-			if (selectedObject->patternWidth < 4)
-			{
-				wxMessageDialog confirmation(this, wxString::Format(DIRECTION_QUESTION, "west"), DIRECTION_QUESTION_TITLE, wxYES_NO | wxCANCEL);
-				if (confirmation.ShowModal() == wxID_YES)
-				{
-					selectedObject->patternWidth = 4;
-					resizeObjectSpriteIDsArray(selectedObject);
-					xDiv = ORIENT_WEST;
-				}
-			}
-			else
-			{
-				xDiv = ORIENT_WEST;
-			}
+			selectOrientation(ORIENT_WEST, "west", 4);
+		break;
+		case ID_DIR_TOP_LEFT_BUTTON:
+			selectOrientation(ORIENT_NORTH_WEST, "north-west", 5);
+		break;
+		case ID_DIR_TOP_RIGHT_BUTTON:
+			selectOrientation(ORIENT_NORTH_EAST, "north-east", 6);
+		break;
+		case ID_DIR_BOTTOM_RIGHT_BUTTON:
+			selectOrientation(ORIENT_SOUTH_EAST, "south-east", 7);
+		break;
+		case ID_DIR_BOTTOM_LEFT_BUTTON:
+			selectOrientation(ORIENT_SOUTH_WEST, "south-west", 8);
 		break;
 	}
 	if (xDiv < selectedObject->patternWidth)
