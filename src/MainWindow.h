@@ -5,6 +5,7 @@
 #include <vector>
 #include <wx/generic/statbmpg.h>
 #include <wx/dnd.h>
+#include <wx/clrpicker.h>
 #include "DatSprStructs.h"
 
 using namespace std;
@@ -55,6 +56,7 @@ public:
 
 private:
 	static const wxString CATEGORIES[];
+
 	enum ControlIds
 	{
 		ID_CATEGORIES_COMBOBOX = 1,
@@ -77,18 +79,21 @@ private:
 		ID_IMPORT_SPRITES_BUTTON,
 		ID_IMPORTED_SPRITE
 	};
-	enum AttrCheckboxIds
+
+	enum BooleanAttrCheckboxIds
 	{
-		ID_ATTR_IS_GROUND_BORDER = 100, ID_ATTR_IS_ON_BOTTOM, ID_ATTR_IS_ON_TOP, ID_ATTR_IS_CONTAINER,
-		ID_ATTR_IS_STACKABLE, ID_ATTR_IS_FORCE_USE, ID_ATTR_IS_MULTI_USE,	ID_ATTR_IS_FLUID_CONTAINER,
-		ID_ATTR_IS_SPLASH, ID_ATTR_BLOCKS_PROJECTILES, ID_ATTR_IS_PICKUPABLE, ID_ATTR_IS_WALKABLE,
-		ID_ATTR_IS_MOVABLE, ID_ATTR_IS_PATHABLE, ID_ATTR_CAN_BE_HIDDEN,	ID_ATTR_IS_HANGABLE,
-		ID_ATTR_IS_HOOK_SOUTH, ID_ATTR_IS_HOOK_EAST, ID_ATTR_IS_ROTATABLE, ID_ATTR_IS_TRANSLUCENT,
-		ID_ATTR_IS_LYING_CORPSE, ID_ATTR_IS_FULL_GROUND, ID_ATTR_IGNORE_LOOK,	ID_ATTR_IS_USABLE,
-		ID_ATTR_LAST
-		// TODO: ID_ATTR_IS_GROUND, ID_ATTR_IS_WRITABLE, ID_ATTR_IS_WRITABLE_ONCE, isAlwaysAnimated, isLightSource,
-		// hasDisplacement, isRaised, isMinimap, isLensHelp, isCloth, isMarketable
+		ID_ATTR_IS_CONTAINER = 100, ID_ATTR_IS_STACKABLE, ID_ATTR_IS_MULTI_USE,	ID_ATTR_IS_WALKABLE,
+		ID_ATTR_IS_PATHABLE, ID_ATTR_IS_MOVABLE, ID_ATTR_BLOCKS_PROJECTILES, ID_ATTR_IS_PICKUPABLE,
+		ID_ATTR_IGNORE_LOOK, ID_ATTR_IS_HANGABLE,	ID_ATTR_IS_LYING_CORPSE, ID_ATTR_HAS_MOUNT, ID_ATTR_BOOLEAN_LAST
 	};
+
+	enum ValueAttrIds
+	{
+		ID_ATTR_IS_FULL_GROUND = 200, ID_ATTR_HAS_LIGHT, ID_ATTR_HAS_OFFSET, ID_ATTR_HAS_ELEVATION,
+		ID_GROUND_SPEED_INPUT, ID_LIGHT_COLOR_PICKER, ID_LIGHT_INTENSITY_INPUT, ID_OFFSET_X_INPUT, ID_OFFSET_Y_INPUT,
+		ID_ELEVATION_INPUT
+	};
+
 	enum OrientationToXDiv
 	{
 		ORIENT_NORTH = 0,
@@ -106,13 +111,14 @@ private:
 	wxPanel * mainPanel = nullptr;
 	wxComboBox * categoryComboBox = nullptr;
 	wxListBox * objectsListBox = nullptr;
-	wxCheckBox * attrCheckboxes[ID_ATTR_LAST];
+	wxCheckBox * booleanAttrCheckboxes[ID_ATTR_BOOLEAN_LAST];
 	DatObjectCategory currentCategory = CategoryItem;
 
 	wxScrolledWindow * objectSpritesPanel = nullptr, * newSpritesPanel = nullptr;
 	wxFlexGridSizer * objectSpritesPanelSizer = nullptr, * newSpritesPanelSizer = nullptr;
 
-	wxPanel * attrsPanel = nullptr, * animationPanel = nullptr, * animationSpritesPanel = nullptr;
+	wxPanel * booleanAttrsPanel = nullptr, * valueAttrsPanel = nullptr;
+	wxPanel * animationPanel = nullptr, * animationSpritesPanel = nullptr;
 	wxFlexGridSizer * animationBoxExpandSizer = nullptr, * animationMainGridSizer = nullptr;
 	wxBoxSizer * animationPanelSizer = nullptr;
 	wxGridSizer * animationSpritesSizer = nullptr;
@@ -121,6 +127,11 @@ private:
 	wxTextCtrl * animationWidthInput = nullptr, * animationHeightInput = nullptr;
 	wxTextCtrl * amountOfFramesInput = nullptr;
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
+	wxStaticText * groundSpeedLabel = nullptr, * lightColorLabel = nullptr, * lightIntensityLabel = nullptr;
+	wxStaticText * offsetXLabel = nullptr, * offsetYLabel = nullptr, * elevationLabel = nullptr;
+	wxTextCtrl * groundSpeedInput = nullptr, * lightIntensityInput = nullptr;
+	wxTextCtrl * offsetXInput = nullptr, * offsetYInput = nullptr, * elevationInput = nullptr;
+	wxColourPickerCtrl * lightColorPicker = nullptr;
 	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0;
 	shared_ptr <wxImage> stubImage = nullptr;
 	unique_ptr <unsigned char[]> stubImageRgb = nullptr;
@@ -145,6 +156,10 @@ private:
 	void OnClickNewObjectButton(wxCommandEvent & event);
 	void OnClickImportSpriteButton(wxCommandEvent & event);
 	void OnClickImportedOrObjectSprite(wxMouseEvent & event);
+	void OnToggleIsFullGroundAttr(wxCommandEvent & event);
+	void OnToggleHasLightAttr(wxCommandEvent & event);
+	void OnToggleHasOffsetAttr(wxCommandEvent & event);
+	void OnToggleHasElevationAttr(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();

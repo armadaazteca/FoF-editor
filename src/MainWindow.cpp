@@ -42,6 +42,10 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
 	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
+	EVT_CHECKBOX(ID_ATTR_IS_FULL_GROUND, MainWindow::OnToggleIsFullGroundAttr)
+	EVT_CHECKBOX(ID_ATTR_HAS_LIGHT, MainWindow::OnToggleHasLightAttr)
+	EVT_CHECKBOX(ID_ATTR_HAS_OFFSET, MainWindow::OnToggleHasOffsetAttr)
+	EVT_CHECKBOX(ID_ATTR_HAS_ELEVATION, MainWindow::OnToggleHasElevationAttr)
 wxEND_EVENT_TABLE()
 
 MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size) : wxFrame(NULL, wxID_ANY, title, pos, size)
@@ -79,7 +83,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto newObjectButton = new wxButton(mainPanel, ID_NEW_OBJECT_BUTTON, "New object");
 	leftColumnGrid->Add(newObjectButton, 1, wxEXPAND);
 
-	auto midColumnGrid = new wxFlexGridSizer(2, 1, 5, 5);
+	auto midColumnGrid = new wxFlexGridSizer(3, 1, 5, 5);
 
 	// animation block
 	auto animationBoxSizer = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Animation");
@@ -186,7 +190,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	animationPanelSizer->Add(widthAndHeightSizer, 0, wxALIGN_CENTER);
 
 	// amount of frames setting
-		auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto amountOfFramesLabel = new wxStaticText(animationPanel, -1, "Amount of frames:");
 	amountOfFramesSizer->Add(amountOfFramesLabel, 0, wxALIGN_CENTER_VERTICAL);
 	amountOfFramesInput = new wxTextCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition,
@@ -203,68 +207,114 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	animationBoxSizer->Add(animationBoxExpandSizer, 1, wxEXPAND);
 	midColumnGrid->Add(animationBoxSizer, 1, wxEXPAND);
 
-	// attributes
-	auto attrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Attributes");
-	attrsPanel = new wxPanel(mainPanel, -1);
-	auto attrsPanelSizer = new wxGridSizer(4, 0, 0);
+	// boolean attributes
+	auto booleanAttrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Boolean attributes");
+	booleanAttrsPanel = new wxPanel(mainPanel, -1);
+	auto booleanAttrsPanelSizer = new wxGridSizer(4, 0, 0);
 
 	wxCheckBox * curCb = nullptr;
-	curCb = attrCheckboxes[ID_ATTR_IS_GROUND_BORDER] = new wxCheckBox(attrsPanel, ID_ATTR_IS_GROUND_BORDER, "Is ground border");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_ON_BOTTOM] = new wxCheckBox(attrsPanel, ID_ATTR_IS_ON_BOTTOM, "Is on bottom");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_ON_TOP] = new wxCheckBox(attrsPanel, ID_ATTR_IS_ON_TOP, "Is on top");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_CONTAINER] = new wxCheckBox(attrsPanel, ID_ATTR_IS_CONTAINER, "Is container");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_STACKABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_STACKABLE, "Is stackable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_FORCE_USE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_FORCE_USE, "Force use");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_MULTI_USE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_MULTI_USE, "Multi use");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_FLUID_CONTAINER] = new wxCheckBox(attrsPanel, ID_ATTR_IS_FLUID_CONTAINER, "Is fluid container");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_SPLASH] = new wxCheckBox(attrsPanel, ID_ATTR_IS_SPLASH, "Is splash");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES] = new wxCheckBox(attrsPanel, ID_ATTR_BLOCKS_PROJECTILES, "Blocks projectiles");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_PICKUPABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_PICKUPABLE, "Is pickupable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_WALKABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_WALKABLE, "Is walkable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_MOVABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_MOVABLE, "Is movable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_PATHABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_PATHABLE, "Is pathable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_CAN_BE_HIDDEN] = new wxCheckBox(attrsPanel, ID_ATTR_CAN_BE_HIDDEN, "Can be hidden");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_HANGABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_HANGABLE, "Is hangable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_HOOK_SOUTH] = new wxCheckBox(attrsPanel, ID_ATTR_IS_HOOK_SOUTH, "Hook south");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_HOOK_EAST] = new wxCheckBox(attrsPanel, ID_ATTR_IS_HOOK_EAST, "Hook east");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_ROTATABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_ROTATABLE, "Is rotatable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_TRANSLUCENT] = new wxCheckBox(attrsPanel, ID_ATTR_IS_TRANSLUCENT, "Is translucent");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_LYING_CORPSE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_LYING_CORPSE, "Is lying corpse");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_FULL_GROUND] = new wxCheckBox(attrsPanel, ID_ATTR_IS_FULL_GROUND, "Is full ground");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IGNORE_LOOK] = new wxCheckBox(attrsPanel, ID_ATTR_IGNORE_LOOK, "Ignore look");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	curCb = attrCheckboxes[ID_ATTR_IS_USABLE] = new wxCheckBox(attrsPanel, ID_ATTR_IS_USABLE, "Is usable");
-	attrsPanelSizer->Add(curCb, 0, wxALL, 3);
-	for (int i = ID_ATTR_IS_GROUND_BORDER; i < ID_ATTR_LAST; ++i)
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_CONTAINER] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_CONTAINER, "Is container");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_STACKABLE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_STACKABLE, "Is stackable");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_MULTI_USE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_MULTI_USE, "Multi use");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_WALKABLE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_WALKABLE, "Is walkable");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_PATHABLE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_PATHABLE, "Is pathable");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_MOVABLE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_MOVABLE, "Is movable");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_BLOCKS_PROJECTILES, "Blocks projectiles");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_PICKUPABLE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_PICKUPABLE, "Is pickupable");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IGNORE_LOOK] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IGNORE_LOOK, "Ignore look");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_HANGABLE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_HANGABLE, "Is hangable");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_IS_LYING_CORPSE] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_IS_LYING_CORPSE, "Is lying corpse");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = booleanAttrCheckboxes[ID_ATTR_HAS_MOUNT] = new wxCheckBox(booleanAttrsPanel, ID_ATTR_HAS_MOUNT, "Has mount");
+	booleanAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	for (int i = ID_ATTR_IS_CONTAINER; i < ID_ATTR_BOOLEAN_LAST; ++i)
 	{
-		attrCheckboxes[i]->Bind(wxEVT_CHECKBOX, &MainWindow::OnToggleAttrCheckbox, this);
+		booleanAttrCheckboxes[i]->Bind(wxEVT_CHECKBOX, &MainWindow::OnToggleAttrCheckbox, this);
 	}
 
-	attrsPanel->SetSizer(attrsPanelSizer);
-	attrsBox->Add(attrsPanel, 1, wxEXPAND);
-	midColumnGrid->Add(attrsBox, 1, wxEXPAND);
+	booleanAttrsPanel->SetSizer(booleanAttrsPanelSizer);
+	booleanAttrsBox->Add(booleanAttrsPanel, 1, wxEXPAND);
+	midColumnGrid->Add(booleanAttrsBox, 1, wxEXPAND);
+
+	auto valueAttrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Value attributes");
+	valueAttrsPanel = new wxPanel(mainPanel, -1);
+	auto valueAttrsPanelSizer = new wxFlexGridSizer(4, 0, 0);
+
+	curCb = new wxCheckBox(valueAttrsPanel, ID_ATTR_IS_FULL_GROUND, "Is full ground");
+	valueAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = new wxCheckBox(valueAttrsPanel, ID_ATTR_HAS_LIGHT, "Has light");
+	valueAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = new wxCheckBox(valueAttrsPanel, ID_ATTR_HAS_OFFSET, "Has offset");
+	valueAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+	curCb = new wxCheckBox(valueAttrsPanel, ID_ATTR_HAS_ELEVATION, "Has elevation");
+	valueAttrsPanelSizer->Add(curCb, 0, wxALL, 3);
+
+	groundSpeedLabel = new wxStaticText(valueAttrsPanel, -1, "Ground speed:");
+	groundSpeedLabel->Disable();
+	valueAttrsPanelSizer->Add(groundSpeedLabel, 0, wxLEFT | wxRIGHT, 3);
+	lightColorLabel = new wxStaticText(valueAttrsPanel, -1, "Light color:");
+	lightColorLabel->Disable();
+	valueAttrsPanelSizer->Add(lightColorLabel, 0, wxLEFT | wxRIGHT, 3);
+	offsetXLabel = new wxStaticText(valueAttrsPanel, -1, "Offset X:");
+	offsetXLabel->Disable();
+	valueAttrsPanelSizer->Add(offsetXLabel, 0, wxLEFT | wxRIGHT, 3);
+	elevationLabel = new wxStaticText(valueAttrsPanel, -1, "Elevation:");
+	elevationLabel->Disable();
+	valueAttrsPanelSizer->Add(elevationLabel, 0, wxLEFT | wxRIGHT, 3);
+
+	groundSpeedInput = new wxTextCtrl(valueAttrsPanel, ID_GROUND_SPEED_INPUT, "0", wxDefaultPosition,
+	                                  wxDefaultSize, wxTE_RIGHT);
+	groundSpeedInput->Disable();
+	valueAttrsPanelSizer->Add(groundSpeedInput, 0, wxALL, 3);
+	lightColorPicker = new wxColourPickerCtrl(valueAttrsPanel, ID_LIGHT_COLOR_PICKER, *wxWHITE);
+	lightColorPicker->Disable();
+	valueAttrsPanelSizer->Add(lightColorPicker, 0, wxALL, 3);
+	offsetXInput = new wxTextCtrl(valueAttrsPanel, ID_OFFSET_X_INPUT, "0", wxDefaultPosition,
+	                              wxDefaultSize, wxTE_RIGHT);
+	offsetXInput->Disable();
+	valueAttrsPanelSizer->Add(offsetXInput, 0, wxALL, 3);
+	elevationInput = new wxTextCtrl(valueAttrsPanel, ID_ELEVATION_INPUT, "0", wxDefaultPosition,
+	                                wxDefaultSize, wxTE_RIGHT);
+	elevationInput->Disable();
+	valueAttrsPanelSizer->Add(elevationInput, 0, wxALL, 3);
+
+	valueAttrsPanelSizer->Add(0, 0); // empty cell
+	lightIntensityLabel = new wxStaticText(valueAttrsPanel, -1, "Light intensity:");
+	lightIntensityLabel->Disable();
+	valueAttrsPanelSizer->Add(lightIntensityLabel, 0, wxLEFT | wxRIGHT, 3);
+	offsetYLabel = new wxStaticText(valueAttrsPanel, -1, "Offset Y:");
+	offsetYLabel->Disable();
+	valueAttrsPanelSizer->Add(offsetYLabel, 0, wxLEFT | wxRIGHT, 3);
+	valueAttrsPanelSizer->Add(0, 0); // empty cell
+
+	valueAttrsPanelSizer->Add(0, 0); // empty cell
+	lightIntensityInput = new wxTextCtrl(valueAttrsPanel, ID_LIGHT_INTENSITY_INPUT, "0", wxDefaultPosition,
+		                                   wxDefaultSize, wxTE_RIGHT);
+	lightIntensityInput->Disable();
+	valueAttrsPanelSizer->Add(lightIntensityInput, 0, wxALL, 3);
+	offsetYInput = new wxTextCtrl(valueAttrsPanel, ID_OFFSET_Y_INPUT, "0", wxDefaultPosition,
+	                              wxDefaultSize, wxTE_RIGHT);
+	offsetYInput->Disable();
+	valueAttrsPanelSizer->Add(offsetYInput, 0, wxALL, 3);
+
+	valueAttrsPanelSizer->AddGrowableCol(0, 0);
+	valueAttrsPanelSizer->AddGrowableCol(1, 0);
+	valueAttrsPanelSizer->AddGrowableCol(2, 0);
+	valueAttrsPanelSizer->AddGrowableCol(3, 0);
+	valueAttrsPanel->SetSizer(valueAttrsPanelSizer);
+	valueAttrsBox->Add(valueAttrsPanel, 1, wxEXPAND);
+	midColumnGrid->Add(valueAttrsBox, 1, wxEXPAND);
+
 	midColumnGrid->AddGrowableRow(0, 1);
 	midColumnGrid->AddGrowableCol(0, 1);
 
@@ -315,7 +365,8 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	// disabling main panel and all nested controls until correct .dat / .spr files will be loaded or created
 	mainPanel->Disable();
 	animationPanel->Disable();
-	attrsPanel->Disable();
+	booleanAttrsPanel->Disable();
+	valueAttrsPanel->Disable();
 }
 
 void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
@@ -335,7 +386,8 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 
 	mainPanel->Disable();
 	animationPanel->Disable();
-	attrsPanel->Disable();
+	booleanAttrsPanel->Disable();
+	valueAttrsPanel->Disable();
 
 	DatSprReaderWriter::getInstance().initNewData();
 	mainPanel->Enable();
@@ -378,7 +430,8 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 	if (selectedObject)
 	{
 		animationPanel->Enable();
-		attrsPanel->Enable();
+		booleanAttrsPanel->Enable();
+		valueAttrsPanel->Enable();
 	}
 	setAttributeValues();
 	buildAnimationSpriteHolders();
@@ -433,7 +486,8 @@ void MainWindow::fillObjectsListBox()
 void MainWindow::OnObjectSelected(wxCommandEvent & event)
 {
 	animationPanel->Enable();
-	attrsPanel->Enable();
+	booleanAttrsPanel->Enable();
+	valueAttrsPanel->Enable();
 
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
 	int objectId = wxAtoi(event.GetString());
@@ -454,9 +508,9 @@ void MainWindow::OnObjectSelected(wxCommandEvent & event)
 void MainWindow::setAttributeValues(bool isNewObject)
 {
 	// at first, resetting attributes to default
-	for (int i = ID_ATTR_IS_GROUND_BORDER; i < ID_ATTR_LAST; ++i)
+	for (int i = ID_ATTR_IS_CONTAINER; i < ID_ATTR_BOOLEAN_LAST; ++i)
 	{
-		attrCheckboxes[i]->SetValue(false);
+		booleanAttrCheckboxes[i]->SetValue(false);
 	}
 	if (isNewObject)
 	{
@@ -467,25 +521,9 @@ void MainWindow::setAttributeValues(bool isNewObject)
 	if (!selectedObject) return;
 
 	// then setting values
-	if (selectedObject->isGroundBorder)
-	{
-		attrCheckboxes[ID_ATTR_IS_GROUND_BORDER]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrGroundBorder] = AttrGroundBorder;
-		}
-	}
-	if (selectedObject->isOnTop)
-	{
-		attrCheckboxes[ID_ATTR_IS_ON_TOP]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrOnTop] = AttrOnTop;
-		}
-	}
 	if (selectedObject->isContainer)
 	{
-		attrCheckboxes[ID_ATTR_IS_CONTAINER]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_IS_CONTAINER]->SetValue(true);
 		if (isNewObject)
 		{
 			selectedObject->allAttrs[AttrContainer] = AttrContainer;
@@ -493,47 +531,47 @@ void MainWindow::setAttributeValues(bool isNewObject)
 	}
 	if (selectedObject->isStackable)
 	{
-		attrCheckboxes[ID_ATTR_IS_STACKABLE]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_IS_STACKABLE]->SetValue(true);
 		if (isNewObject)
 		{
 			selectedObject->allAttrs[AttrStackable] = AttrStackable;
 		}
 	}
-	if (selectedObject->isForceUse)
-	{
-		attrCheckboxes[ID_ATTR_IS_FORCE_USE]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrForceUse] = AttrForceUse;
-		}
-	}
 	if (selectedObject->isMultiUse)
 	{
-		attrCheckboxes[ID_ATTR_IS_MULTI_USE]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_IS_MULTI_USE]->SetValue(true);
 		if (isNewObject)
 		{
 			selectedObject->allAttrs[AttrMultiUse] = AttrMultiUse;
 		}
 	}
-	if (selectedObject->isFluidContainer)
+	if (selectedObject->isWalkable)
 	{
-		attrCheckboxes[ID_ATTR_IS_FLUID_CONTAINER]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrFluidContainer] = AttrFluidContainer;
-		}
+		booleanAttrCheckboxes[ID_ATTR_IS_WALKABLE]->SetValue(true);
 	}
-	if (selectedObject->isSplash)
+	else if (isNewObject)
 	{
-		attrCheckboxes[ID_ATTR_IS_SPLASH]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrSplash] = AttrSplash;
-		}
+		selectedObject->allAttrs[AttrNotWalkable] = AttrNotWalkable;
+	}
+	if (selectedObject->isPathable)
+	{
+		booleanAttrCheckboxes[ID_ATTR_IS_PATHABLE]->SetValue(true);
+	}
+	else if (isNewObject)
+	{
+		selectedObject->allAttrs[AttrNotPathable] = AttrNotPathable;
+	}
+	if (selectedObject->isMovable)
+	{
+		booleanAttrCheckboxes[ID_ATTR_IS_MOVABLE]->SetValue(true);
+	}
+	else if (isNewObject)
+	{
+		selectedObject->allAttrs[AttrNotMoveable] = AttrNotMoveable;
 	}
 	if (selectedObject->blocksProjectiles)
 	{
-		attrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES]->SetValue(true);
 		if (isNewObject)
 		{
 			selectedObject->allAttrs[AttrBlockProjectile] = AttrBlockProjectile;
@@ -541,191 +579,99 @@ void MainWindow::setAttributeValues(bool isNewObject)
 	}
 	if (selectedObject->isPickupable)
 	{
-		attrCheckboxes[ID_ATTR_IS_PICKUPABLE]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_IS_PICKUPABLE]->SetValue(true);
 		if (isNewObject)
 		{
 			selectedObject->allAttrs[AttrPickupable] = AttrPickupable;
 		}
 	}
-	if (selectedObject->isWalkable)
-	{
-		attrCheckboxes[ID_ATTR_IS_WALKABLE]->SetValue(true);
-	}
-	else if (isNewObject)
-	{
-		selectedObject->allAttrs[AttrNotWalkable] = AttrNotWalkable;
-	}
-	if (selectedObject->isMovable)
-	{
-		attrCheckboxes[ID_ATTR_IS_MOVABLE]->SetValue(true);
-	}
-	else if (isNewObject)
-	{
-		selectedObject->allAttrs[AttrNotMoveable] = AttrNotMoveable;
-	}
-	if (selectedObject->isPathable)
-	{
-		attrCheckboxes[ID_ATTR_IS_PATHABLE]->SetValue(true);
-	}
-	else if (isNewObject)
-	{
-		selectedObject->allAttrs[AttrNotPathable] = AttrNotPathable;
-	}
-	if (selectedObject->canBeHidden)
-	{
-		attrCheckboxes[ID_ATTR_CAN_BE_HIDDEN]->SetValue(true);
-	}
-	else if (isNewObject)
-	{
-		selectedObject->allAttrs[AttrDontHide] = AttrDontHide;
-	}
-	if (selectedObject->isHangable)
-	{
-		attrCheckboxes[ID_ATTR_IS_HANGABLE]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrHangable] = AttrHangable;
-		}
-	}
-	if (selectedObject->isHookSouth)
-	{
-		attrCheckboxes[ID_ATTR_IS_HOOK_SOUTH]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrHookSouth] = AttrHookSouth;
-		}
-	}
-	if (selectedObject->isHookEast)
-	{
-		attrCheckboxes[ID_ATTR_IS_HOOK_EAST]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrHookEast] = AttrHookEast;
-		}
-	}
-	if (selectedObject->isRotatable)
-	{
-		attrCheckboxes[ID_ATTR_IS_ROTATABLE]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrRotateable] = AttrRotateable;
-		}
-	}
-	if (selectedObject->isTranslucent)
-	{
-		attrCheckboxes[ID_ATTR_IS_TRANSLUCENT]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrTranslucent] = AttrTranslucent;
-		}
-	}
-	if (selectedObject->isLyingCorpse)
-	{
-		attrCheckboxes[ID_ATTR_IS_LYING_CORPSE]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrLyingCorpse] = AttrLyingCorpse;
-		}
-	}
-	if (selectedObject->isFullGround)
-	{
-		attrCheckboxes[ID_ATTR_IS_FULL_GROUND]->SetValue(true);
-		if (isNewObject)
-		{
-			selectedObject->allAttrs[AttrFullGround] = AttrFullGround;
-		}
-	}
 	if (selectedObject->ignoreLook)
 	{
-		attrCheckboxes[ID_ATTR_IGNORE_LOOK]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_IGNORE_LOOK]->SetValue(true);
 		if (isNewObject)
 		{
 			selectedObject->allAttrs[AttrLook] = AttrLook;
 		}
 	}
-	if (selectedObject->isUsable)
+	if (selectedObject->isHangable)
 	{
-		attrCheckboxes[ID_ATTR_IS_USABLE]->SetValue(true);
+		booleanAttrCheckboxes[ID_ATTR_IS_HANGABLE]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrUsable] = AttrUsable;
+			selectedObject->allAttrs[AttrHangable] = AttrHangable;
+		}
+	}
+	if (selectedObject->isLyingCorpse)
+	{
+		booleanAttrCheckboxes[ID_ATTR_IS_LYING_CORPSE]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrLyingCorpse] = AttrLyingCorpse;
+		}
+	}
+	if (selectedObject->hasMount)
+	{
+		booleanAttrCheckboxes[ID_ATTR_HAS_MOUNT]->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrMount] = AttrMount;
 		}
 	}
 }
 
 void MainWindow::OnToggleAttrCheckbox(wxCommandEvent & event)
 {
-	bool value = (bool) event.GetInt();
+	int intval = event.GetInt();
+	bool value = (bool) intval;
 	switch (event.GetId())
 	{
-		case ID_ATTR_IS_GROUND_BORDER:
-			selectedObject->isGroundBorder = value;
-		break;
-		case ID_ATTR_IS_ON_TOP:
-			selectedObject->isOnTop = value;
-		break;
 		case ID_ATTR_IS_CONTAINER:
 			selectedObject->isContainer = value;
+			selectedObject->allAttrs[AttrContainer] = intval;
 		break;
 		case ID_ATTR_IS_STACKABLE:
 			selectedObject->isStackable = value;
-		break;
-		case ID_ATTR_IS_FORCE_USE:
-			selectedObject->isForceUse = value;
+			selectedObject->allAttrs[AttrStackable] = intval;
 		break;
 		case ID_ATTR_IS_MULTI_USE:
 			selectedObject->isMultiUse = value;
-		break;
-		case ID_ATTR_IS_FLUID_CONTAINER:
-			selectedObject->isFluidContainer = value;
-		break;
-		case ID_ATTR_IS_SPLASH:
-			selectedObject->isSplash = value;
-		break;
-		case ID_ATTR_BLOCKS_PROJECTILES:
-			selectedObject->blocksProjectiles = value;
-		break;
-		case ID_ATTR_IS_PICKUPABLE:
-			selectedObject->isPickupable = value;
+			selectedObject->allAttrs[AttrMultiUse] = intval;
 		break;
 		case ID_ATTR_IS_WALKABLE:
 			selectedObject->isWalkable = value;
-		break;
-		case ID_ATTR_IS_MOVABLE:
-			selectedObject->isMovable = value;
+			selectedObject->allAttrs[AttrNotWalkable] = (value ? 0 : 1);
 		break;
 		case ID_ATTR_IS_PATHABLE:
 			selectedObject->isPathable = value;
+			selectedObject->allAttrs[AttrNotPathable] = (value ? 0 : 1);
 		break;
-		case ID_ATTR_CAN_BE_HIDDEN:
-			selectedObject->canBeHidden = value;
+		case ID_ATTR_IS_MOVABLE:
+			selectedObject->isMovable = value;
+			selectedObject->allAttrs[AttrNotMoveable] = (value ? 0 : 1);
 		break;
-		case ID_ATTR_IS_HANGABLE:
-			selectedObject->isHangable = value;
+		case ID_ATTR_BLOCKS_PROJECTILES:
+			selectedObject->blocksProjectiles = value;
+			selectedObject->allAttrs[AttrBlockProjectile] = intval;
 		break;
-		case ID_ATTR_IS_HOOK_SOUTH:
-			selectedObject->isHookSouth = value;
-		break;
-		case ID_ATTR_IS_HOOK_EAST:
-			selectedObject->isHookEast = value;
-		break;
-		case ID_ATTR_IS_ROTATABLE:
-			selectedObject->isRotatable = value;
-		break;
-		case ID_ATTR_IS_TRANSLUCENT:
-			selectedObject->isTranslucent = value;
-		break;
-		case ID_ATTR_IS_LYING_CORPSE:
-			selectedObject->isLyingCorpse = value;
-		break;
-		case ID_ATTR_IS_FULL_GROUND:
-			selectedObject->isFullGround = value;
+		case ID_ATTR_IS_PICKUPABLE:
+			selectedObject->isPickupable = value;
+			selectedObject->allAttrs[AttrPickupable] = intval;
 		break;
 		case ID_ATTR_IGNORE_LOOK:
 			selectedObject->ignoreLook = value;
+			selectedObject->allAttrs[AttrLook] = intval;
 		break;
-		case ID_ATTR_IS_USABLE:
-			selectedObject->isUsable = value;
+		case ID_ATTR_IS_HANGABLE:
+			selectedObject->isHangable = value;
+			selectedObject->allAttrs[AttrHangable] = intval;
+		break;
+		case ID_ATTR_IS_LYING_CORPSE:
+			selectedObject->isLyingCorpse = value;
+			selectedObject->allAttrs[AttrLyingCorpse] = intval;
+		break;
+		case ID_ATTR_HAS_MOUNT:
+			selectedObject->hasMount = value;
+			selectedObject->allAttrs[AttrMount] = intval;
 		break;
 	}
 }
@@ -1032,7 +978,8 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	objectsListBox->SetSelection(objectsListBox->GetCount() - 1);
 
 	animationPanel->Enable();
-	attrsPanel->Enable();
+	booleanAttrsPanel->Enable();
+	valueAttrsPanel->Enable();
 
 	setAttributeValues();
 	buildAnimationSpriteHolders();
@@ -1095,6 +1042,56 @@ void MainWindow::OnClickImportedOrObjectSprite(wxMouseEvent & event)
 	wxTextDataObject data(strEsiIndex);
 	dragSource.SetData(data);
 	dragSource.DoDragDrop(true);
+}
+
+void MainWindow::OnToggleIsFullGroundAttr(wxCommandEvent & event)
+{
+	int intval = event.GetInt();
+	bool value = (bool) intval;
+	groundSpeedLabel->Enable(value);
+	groundSpeedInput->Enable(value);
+	selectedObject->isGround = selectedObject->isFullGround = value;
+	selectedObject->allAttrs[AttrGround] = selectedObject->allAttrs[AttrFullGround] = intval;
+	selectedObject->groundSpeed = wxAtoi(groundSpeedInput->GetValue());
+}
+
+void MainWindow::OnToggleHasLightAttr(wxCommandEvent & event)
+{
+	int intval = event.GetInt();
+	bool value = (bool) intval;
+	lightColorLabel->Enable(value);
+	lightColorPicker->Enable(value);
+	lightIntensityLabel->Enable(value);
+	lightIntensityInput->Enable(value);
+	selectedObject->isLightSource = value;
+	selectedObject->allAttrs[AttrLight] = intval;
+	// TODO: handle light color here
+	selectedObject->lightIntensity = wxAtoi(lightIntensityInput->GetValue());
+}
+
+void MainWindow::OnToggleHasOffsetAttr(wxCommandEvent & event)
+{
+	int intval = event.GetInt();
+	bool value = (bool) intval;
+	offsetXLabel->Enable(value);
+	offsetXInput->Enable(value);
+	offsetYLabel->Enable(value);
+	offsetYInput->Enable(value);
+	selectedObject->hasDisplacement = value;
+	selectedObject->allAttrs[AttrDisplacement] = intval;
+	selectedObject->displacementX = wxAtoi(offsetXInput->GetValue());
+	selectedObject->displacementY = wxAtoi(offsetYInput->GetValue());
+}
+
+void MainWindow::OnToggleHasElevationAttr(wxCommandEvent & event)
+{
+	int intval = event.GetInt();
+	bool value = (bool) intval;
+	elevationLabel->Enable(value);
+	elevationInput->Enable(value);
+	selectedObject->isRaised = value;
+	selectedObject->allAttrs[AttrElevation] = intval;
+	selectedObject->elevation = wxAtoi(elevationInput->GetValue());
 }
 
 void MainWindow::drawAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap)

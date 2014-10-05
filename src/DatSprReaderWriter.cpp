@@ -69,7 +69,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 					{
 						case AttrGround:
 							object->isGround = true;
-							object->speed = readU16();
+							object->groundSpeed = readU16();
 						break;
 						case AttrGroundBorder:
 							object->isGroundBorder = true;
@@ -188,6 +188,10 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 						break;
 						case AttrUsable:
 							object->isUsable = true;
+						break;
+						// custom attributes
+						case AttrMount:
+							object->hasMount = true;
 						break;
 					}
 					object->allAttrs[attr] = true;
@@ -410,7 +414,7 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 						switch (attr)
 						{
 							case AttrGround:
-								writeU16(object->speed);
+								writeU16(object->groundSpeed);
 							break;
 							case AttrWritable:
 							case AttrWritableOnce:

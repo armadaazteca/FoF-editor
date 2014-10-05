@@ -1,6 +1,7 @@
+- validate value attributes to be correct integers
+- change dat object values for corresponding value attributes field changes
 - adjust attributes set and implement new attributes
 - handle attribute checkboxes values changes
-- implement support for 8-direction sprites
 - wheel-scrolling for objects listbox
 - validate image file types when importing sprites
 - validate imported sprite dimensions
@@ -11,3 +12,5 @@
 - write about text
 - clear sprite cell by right-click
 - possibility to export particular 32x32 sprites or full composed picture into png
+- support for separate layer editing, field for layers number, checkbox for 'blend layers'
+- think of how to handle light color attribute properly

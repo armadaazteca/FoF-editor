@@ -52,6 +52,10 @@ enum DatObjectAttr : unsigned char
 	AttrCloth = 32,
 	AttrMarket = 33,
 	AttrUsable = 34,
+
+	// custom attributes start here, better to give them higher number just in case
+	AttrMount = 200,
+
 	AttrLast = 255
 };
 
@@ -66,8 +70,8 @@ struct DatObject
 	bool isHangable = false, isHookSouth = false, isHookEast = false, isRotatable = false, isLightSource = false;
 	bool isTranslucent = false, hasDisplacement = false, isRaised = false, isLyingCorpse = false;
 	bool isAlwaysAnimated = false, isMinimap = false, isLensHelp = false, isFullGround = false, ignoreLook = false;
-	bool isCloth = false, isMarketable = false, isUsable = false;
-	short speed = 0;
+	bool isCloth = false, isMarketable = false, isUsable = false, hasMount = false;
+	short groundSpeed = 0;
 	unsigned short lightIntensity = 0;
 	unsigned short lightColor = 0;
 	short displacementX = 0, displacementY = 0;
