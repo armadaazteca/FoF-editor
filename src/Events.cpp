@@ -5,3 +5,4 @@
 #include "Events.h"
 
 wxDEFINE_EVENT(DAT_SPR_LOADED, wxCommandEvent);
+wxDEFINE_EVENT(DAT_SPR_SAVED, wxCommandEvent);

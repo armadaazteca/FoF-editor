@@ -4,13 +4,15 @@
 #endif
 #include "NewEditor.h"
 #include "MainWindow.h"
+#include "Config.h"
 
 wxIMPLEMENT_APP(NewEditor);
 
 bool NewEditor::OnInit()
 {
 	wxImage::AddHandler(new wxPNGHandler());
-	MainWindow * win = new MainWindow("NewEditor", wxDefaultPosition, wxSize(DEFAULT_WIDTH, DEFAULT_HEIGHT));
+	const wxString & appTitle = wxString::Format("%s %s", Config::APP_NAME, Config::VERSION_STRING);
+	MainWindow * win = new MainWindow(appTitle, wxDefaultPosition, wxSize(DEFAULT_WIDTH, DEFAULT_HEIGHT));
 	win->Show(true);
 	win->Center();
 	return true;

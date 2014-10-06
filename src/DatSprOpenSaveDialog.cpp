@@ -20,7 +20,8 @@ wxEND_EVENT_TABLE()
 
 const wxString DatSprOpenSaveDialog::DEFAULT_FILENAME = "Tibia";
 
-DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode) : wxDialog(parent, -1, wxT("Open .dat / .spr files")), currentLoading(LOADING_DAT)
+DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
+	: wxDialog(parent, -1, wxString::Format("%s .dat / .spr / .alp files", mode == MODE_OPEN ? "Open" : "Save")), currentLoading(LOADING_DAT)
 {
 	this->mode = mode;
 
@@ -220,6 +221,9 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					currentLoading = LOADING_ALP;
 					if (DatSprReaderWriter::getInstance().writeAlpha(alpPathStr, this))
 					{
+						// notifying main window of that files has been saved
+						wxCommandEvent event(DAT_SPR_SAVED, 1);
+						wxPostEvent(this->m_parent, event);
 						Close();
 					}
 					else
@@ -230,6 +234,9 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 				else
 				{
 					Close();
+					// notifying main window of that files has been saved
+					wxCommandEvent event(DAT_SPR_SAVED, 1);
+					wxPostEvent(this->m_parent, event);
 				}
 			}
 			else

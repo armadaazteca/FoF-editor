@@ -340,6 +340,7 @@ bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable 
 		{
 			id = readU32();
 			sprite = (*sprites)[id];
+			sprite->hasRealAlpha = true;
 			sprite->offsetAlpha = readU32();
 			currentOffset = file.tellg();
 			file.seekg(sprite->offsetAlpha);

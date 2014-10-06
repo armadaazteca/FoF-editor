@@ -13,7 +13,7 @@ using namespace std;
 class MainWindow : public wxFrame
 {
 public:
-	static const wxString DIRECTION_QUESTION, DIRECTION_QUESTION_TITLE;
+	static const wxString & DIRECTION_QUESTION, & DIRECTION_QUESTION_TITLE;
 
 	MainWindow(const wxString & title, const wxPoint & pos, const wxSize & size);
 
@@ -46,6 +46,7 @@ public:
 		virtual bool OnDropText(wxCoord x, wxCoord y, const wxString & data);
 		virtual wxDragResult OnEnter(wxCoord x, wxCoord y, wxDragResult defResult);
 		virtual void OnLeave();
+		inline unsigned int getSpriteHolderIndex() { return spriteHolderIndex; }
 		inline void setSpriteHolderIndex(unsigned int index) { spriteHolderIndex = index; }
 		inline void setMainWindow(MainWindow * mainWindow) { this->mainWindow = mainWindow; };
 		inline virtual ~AnimationSpriteDropTarget() {}
@@ -94,6 +95,11 @@ private:
 		ID_ELEVATION_INPUT
 	};
 
+	enum MenuIDs
+	{
+		ID_MENU_QUICK_GUIDE = 300
+	};
+
 	enum OrientationToXDiv
 	{
 		ORIENT_NORTH = 0,
@@ -109,9 +115,10 @@ private:
 	shared_ptr <DatObject> selectedObject = nullptr;
 
 	wxPanel * mainPanel = nullptr;
+	wxStatusBar * statusBar = nullptr;
 	wxComboBox * categoryComboBox = nullptr;
 	wxListBox * objectsListBox = nullptr;
-	wxCheckBox * booleanAttrCheckboxes[ID_ATTR_BOOLEAN_LAST];
+	wxCheckBox * booleanAttrCheckboxes[ID_ATTR_BOOLEAN_LAST], * valueAttrCheckboxes[ID_GROUND_SPEED_INPUT];
 	DatObjectCategory currentCategory = CategoryItem;
 
 	wxScrolledWindow * objectSpritesPanel = nullptr, * newSpritesPanel = nullptr;
@@ -144,6 +151,7 @@ private:
 	void OnCreateNewFiles(wxCommandEvent & event);
 	void OnOpenDatSprDialog(wxCommandEvent & event);
 	void OnDatSprLoaded(wxCommandEvent & event);
+	void OnDatSprSaved(wxCommandEvent & event);
 	void OnObjectCategoryChanged(wxCommandEvent & event);
 	void OnObjectSelected(wxCommandEvent & event);
 	void OnToggleAttrCheckbox(wxCommandEvent & event);
@@ -160,7 +168,13 @@ private:
 	void OnToggleHasLightAttr(wxCommandEvent & event);
 	void OnToggleHasOffsetAttr(wxCommandEvent & event);
 	void OnToggleHasElevationAttr(wxCommandEvent & event);
+	void OnGroundSpeedChanged(wxCommandEvent & event);
+	void OnLightColorChanged(wxColourPickerEvent & event);
+	void OnLightIntensityChanged(wxCommandEvent & event);
+	void OnOffsetXYChanged(wxCommandEvent & event);
+	void OnElevationChanged(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
+	void OnQuickGuide(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	void fillObjectsListBox();
 	void setAttributeValues(bool isNewObject = false);
