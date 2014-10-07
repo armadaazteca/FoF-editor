@@ -21,7 +21,8 @@ wxEND_EVENT_TABLE()
 const wxString DatSprOpenSaveDialog::DEFAULT_FILENAME = "Tibia";
 
 DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
-	: wxDialog(parent, -1, wxString::Format("%s .dat / .spr / .alp files", mode == MODE_OPEN ? "Open" : "Save")), currentLoading(LOADING_DAT)
+	: wxDialog(parent, -1, wxString::Format("%s .dat / .spr / .alp files", mode == MODE_OPEN ? "Open" : "Save")),
+	  currentLoading(LOADING_DAT)
 {
 	this->mode = mode;
 
@@ -36,7 +37,7 @@ DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
 
 	auto datLabel = new wxStaticText(panel, -1, wxT(".dat file:"));
 	const wxString & datPathStr = (mode == MODE_OPEN ? settings.get("datOpenPath") : settings.get("datSavePath"));
-	datPath = new wxTextCtrl(panel, -1, datPathStr);
+	datPath = new wxTextCtrl(panel, -1, datPathStr, wxDefaultPosition, wxSize(300, -1));
 	auto datButton = new wxButton(panel, ID_BROWSE_DAT_BUTTON, browse);
 
 	auto sprLabel = new wxStaticText(panel, -1, wxT(".spr file:"));

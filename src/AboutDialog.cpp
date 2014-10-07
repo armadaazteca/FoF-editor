@@ -36,4 +36,5 @@ AboutDialog::AboutDialog(wxWindow * parent) : wxDialog(parent, wxID_ANY, "About"
 	vbox->Add(hl, 0, wxLEFT | wxRIGHT, 10);
 
 	SetSizer(vbox);
+	Center();
 }

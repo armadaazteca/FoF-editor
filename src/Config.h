@@ -15,6 +15,7 @@ public:
 	static const int MAX_OBJECT_WIDTH = 4;
 	static const int MAX_OBJECT_HEIGHT = 4;
 	static const int MAX_ANIM_FRAMES = 8;
+	static const int OBJECTS_LIST_BOX_WHEEL_SCROLL_LINES = 10;
 };
 
 #endif // _CONFIG_H_

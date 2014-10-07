@@ -4,7 +4,6 @@
 #include <vector>
 #include <map>
 #include <memory>
-#include <iostream>
 #include <fstream>
 #include "DatSprStructs.h"
 

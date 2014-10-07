@@ -112,6 +112,8 @@ private:
 		ORIENT_SOUTH_WEST = 7
 	};
 
+	bool isDirty = false; // whether files have been modified
+
 	shared_ptr <DatObject> selectedObject = nullptr;
 
 	wxPanel * mainPanel = nullptr;
@@ -164,6 +166,7 @@ private:
 	void OnClickNewObjectButton(wxCommandEvent & event);
 	void OnClickImportSpriteButton(wxCommandEvent & event);
 	void OnClickImportedOrObjectSprite(wxMouseEvent & event);
+	void OnToggleAlwaysAnimatedAttr(wxCommandEvent & event);
 	void OnToggleIsFullGroundAttr(wxCommandEvent & event);
 	void OnToggleHasLightAttr(wxCommandEvent & event);
 	void OnToggleHasOffsetAttr(wxCommandEvent & event);
@@ -174,8 +177,10 @@ private:
 	void OnOffsetXYChanged(wxCommandEvent & event);
 	void OnElevationChanged(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
+	void OnClose(wxCloseEvent & event);
 	void OnQuickGuide(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
+	bool checkDirty();
 	void fillObjectsListBox();
 	void setAttributeValues(bool isNewObject = false);
 	void fillObjectSprites();

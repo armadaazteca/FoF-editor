@@ -10,6 +10,32 @@
       <Platform>Win32</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\AboutDialog.h" />
+    <ClInclude Include="src\Config.h" />
+    <ClInclude Include="src\DatSprOpenSaveDialog.h" />
+    <ClInclude Include="src\DatSprReaderWriter.h" />
+    <ClInclude Include="src\DatSprStructs.h" />
+    <ClInclude Include="src\Events.h" />
+    <ClInclude Include="src\Interfaces.h" />
+    <ClInclude Include="src\MainWindow.h" />
+    <ClInclude Include="src\NewEditor.h" />
+    <ClInclude Include="src\QuickGuideDialog.h" />
+    <ClInclude Include="src\Settings.h" />
+    <ClInclude Include="src\Utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\AboutDialog.cpp" />
+    <ClCompile Include="src\Config.cpp" />
+    <ClCompile Include="src\DatSprOpenSaveDialog.cpp" />
+    <ClCompile Include="src\DatSprReaderWriter.cpp" />
+    <ClCompile Include="src\Events.cpp" />
+    <ClCompile Include="src\MainWindow.cpp" />
+    <ClCompile Include="src\NewEditor.cpp" />
+    <ClCompile Include="src\QuickGuideDialog.cpp" />
+    <ClCompile Include="src\Settings.cpp" />
+    <ClCompile Include="src\Utils.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{16950085-5B99-4E20-88FA-0AA38ACC846F}</ProjectGuid>
     <RootNamespace>NewEditor</RootNamespace>
@@ -26,7 +52,7 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v120</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -76,25 +102,6 @@
       <AdditionalLibraryDirectories>$(WXHOME)\lib\vc_lib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="src\DatSprOpenSaveDialog.h" />
-    <ClInclude Include="src\DatSprReaderWriter.h" />
-    <ClInclude Include="src\DatSprStructs.h" />
-    <ClInclude Include="src\DatStructs.h" />
-    <ClInclude Include="src\Events.h" />
-    <ClInclude Include="src\Interfaces.h" />
-    <ClInclude Include="src\MainWindow.h" />
-    <ClInclude Include="src\NewEditor.h" />
-    <ClInclude Include="src\Settings.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="src\DatSprOpenSaveDialog.cpp" />
-    <ClCompile Include="src\DatSprReaderWriter.cpp" />
-    <ClCompile Include="src\Events.cpp" />
-    <ClCompile Include="src\MainWindow.cpp" />
-    <ClCompile Include="src\NewEditor.cpp" />
-    <ClCompile Include="src\Settings.cpp" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

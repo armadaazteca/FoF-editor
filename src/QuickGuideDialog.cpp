@@ -46,7 +46,7 @@ QuickGuideDialog::QuickGuideDialog(wxWindow * parent) : wxDialog(parent, wxID_AN
 	                           wxTE_MULTILINE | wxTE_READONLY | wxNO_BORDER);
 	text->SetBackgroundColour(GetDefaultAttributes().colBg);
 	vbox->Add(text, 1, wxALL | wxEXPAND, 10);
-	SetBackgroundColour(*wxWHITE);
 
 	SetSizer(vbox);
+	Center();
 }

@@ -1,4 +1,5 @@
 #include <math.h>
+#include <fstream>
 #include <wx/wxprec.h>
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
@@ -24,6 +25,7 @@ const wxString & STR_ZERO = "0";
 const wxString & OBJ_ATTR_CHANGE_STATUS_MSG = "Object \"%s\" attribute set to %s";
 
 wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
+	EVT_CLOSE(MainWindow::OnClose)
 	EVT_MENU(wxID_NEW, MainWindow::OnCreateNewFiles)
 	EVT_MENU(wxID_OPEN, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_SAVE, MainWindow::OnOpenDatSprDialog)
@@ -49,6 +51,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
 	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
+	EVT_CHECKBOX(ID_ALWAYS_ANIMATED_CHECKBOX, MainWindow::OnToggleAlwaysAnimatedAttr)
 	EVT_CHECKBOX(ID_ATTR_IS_FULL_GROUND, MainWindow::OnToggleIsFullGroundAttr)
 	EVT_CHECKBOX(ID_ATTR_HAS_LIGHT, MainWindow::OnToggleHasLightAttr)
 	EVT_CHECKBOX(ID_ATTR_HAS_OFFSET, MainWindow::OnToggleHasOffsetAttr)
@@ -97,6 +100,12 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	leftColumnGrid->AddGrowableRow(1, 1);
 	auto newObjectButton = new wxButton(mainPanel, ID_NEW_OBJECT_BUTTON, "New object");
 	leftColumnGrid->Add(newObjectButton, 1, wxEXPAND);
+
+	auto onMouseWheel = [&](wxMouseEvent & event)
+	{
+		objectsListBox->ScrollLines((event.GetWheelRotation() > 0 ? -1 : 1) * Config::OBJECTS_LIST_BOX_WHEEL_SCROLL_LINES);
+	};
+	objectsListBox->Bind(wxEVT_MOUSEWHEEL, onMouseWheel);
 
 	auto midColumnGrid = new wxFlexGridSizer(3, 1, 5, 5);
 
@@ -391,7 +400,9 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 {
-	// TODO: confirmation of unsaved previous changes required here
+	if (!checkDirty()) return;
+
+	currentCategory = CategoryItem;
 	categoryComboBox->SetSelection(0);
 	objectsListBox->Clear();
 	if (animationSpritesPanel)
@@ -411,6 +422,8 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 
 	DatSprReaderWriter::getInstance().initNewData();
 	mainPanel->Enable();
+
+	isDirty = false;
 
 	statusBar->SetStatusText("New files initialized");
 }
@@ -465,6 +478,7 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 
 void MainWindow::OnDatSprSaved(wxCommandEvent & event)
 {
+	isDirty = false;
 	statusBar->SetStatusText("Files have been saved successfully");
 }
 
@@ -494,8 +508,39 @@ void MainWindow::OnObjectCategoryChanged(wxCommandEvent & event)
 	fillObjectSprites();
 	buildAnimationSpriteHolders();
 	fillAnimationSection();
+	
+	animationPanel->Enable(selectedObject ? true : false);
+	booleanAttrsPanel->Enable(selectedObject ? true : false);
+	valueAttrsPanel->Enable(selectedObject ? true : false);
 
 	statusBar->SetStatusText(wxString::Format("Current category switched to \"%s\"", CATEGORIES[currentCategory]));
+}
+
+bool MainWindow::checkDirty()
+{
+	if (isDirty)
+	{
+		wxMessageDialog msg(this, "Files have been modified, do you want to save or discard changes?", "Confirmation",
+		                    wxYES_NO | wxCANCEL);
+		msg.SetYesNoLabels("Save now...", "Discard");
+		int result = msg.ShowModal();
+		wxCommandEvent event;
+		switch (result)
+		{
+			case wxID_YES:
+				event.SetId(wxID_SAVE);
+				OnOpenDatSprDialog(event);
+				return false;
+			break;
+			case wxID_NO:
+				return true;
+			break;
+			case wxID_CANCEL:
+				return false;
+			break;
+		}
+	}
+	return true;
 }
 
 void MainWindow::fillObjectsListBox()
@@ -542,27 +587,50 @@ void MainWindow::OnObjectSelected(wxCommandEvent & event)
 
 void MainWindow::setAttributeValues(bool isNewObject)
 {
-	// boolean attributes
-	// at first, resetting attributes to default
+	// at first, resetting all attributes to default
 	for (int i = ID_ATTR_IS_CONTAINER; i < ID_ATTR_BOOLEAN_LAST; ++i)
 	{
 		booleanAttrCheckboxes[i]->SetValue(false);
 	}
+	for (int i = ID_ATTR_IS_FULL_GROUND; i <= ID_ATTR_HAS_ELEVATION; ++i)
+	{
+		valueAttrCheckboxes[i]->SetValue(false);
+	}
+	groundSpeedLabel->Disable();
+	groundSpeedInput->ChangeValue(STR_ZERO);
+	groundSpeedInput->Disable();
+	lightColorLabel->Disable();
+	lightColorPicker->SetColour(*wxWHITE);
+	lightColorPicker->Disable();
+	lightIntensityLabel->Disable();
+	lightIntensityInput->ChangeValue(STR_ZERO);
+	lightIntensityInput->Disable();
+	offsetXLabel->Disable();
+	offsetXInput->ChangeValue(STR_ZERO);
+	offsetXInput->Disable();
+	offsetYLabel->Disable();
+	offsetYInput->ChangeValue(STR_ZERO);
+	offsetYInput->Disable();
+	elevationLabel->Disable();
+	elevationInput->ChangeValue(STR_ZERO);
+	elevationInput->Disable();
+
 	if (isNewObject)
 	{
 		memset(selectedObject->allAttrs, 0, AttrLast);
-		selectedObject->allAttrs[AttrLast] = AttrLast;
+		selectedObject->allAttrs[AttrLast] = true;
 	}
 
 	if (!selectedObject) return;
 
 	// then setting values
+	// boolean attributes first
 	if (selectedObject->isContainer)
 	{
 		booleanAttrCheckboxes[ID_ATTR_IS_CONTAINER]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrContainer] = AttrContainer;
+			selectedObject->allAttrs[AttrContainer] = true;
 		}
 	}
 	if (selectedObject->isStackable)
@@ -570,7 +638,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_IS_STACKABLE]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrStackable] = AttrStackable;
+			selectedObject->allAttrs[AttrStackable] = true;
 		}
 	}
 	if (selectedObject->isMultiUse)
@@ -578,7 +646,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_IS_MULTI_USE]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrMultiUse] = AttrMultiUse;
+			selectedObject->allAttrs[AttrMultiUse] = true;
 		}
 	}
 	if (selectedObject->isWalkable)
@@ -587,7 +655,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 	}
 	else if (isNewObject)
 	{
-		selectedObject->allAttrs[AttrNotWalkable] = AttrNotWalkable;
+		selectedObject->allAttrs[AttrNotWalkable] = true;
 	}
 	if (selectedObject->isPathable)
 	{
@@ -595,7 +663,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 	}
 	else if (isNewObject)
 	{
-		selectedObject->allAttrs[AttrNotPathable] = AttrNotPathable;
+		selectedObject->allAttrs[AttrNotPathable] = true;
 	}
 	if (selectedObject->isMovable)
 	{
@@ -603,14 +671,14 @@ void MainWindow::setAttributeValues(bool isNewObject)
 	}
 	else if (isNewObject)
 	{
-		selectedObject->allAttrs[AttrNotMoveable] = AttrNotMoveable;
+		selectedObject->allAttrs[AttrNotMoveable] = true;
 	}
 	if (selectedObject->blocksProjectiles)
 	{
 		booleanAttrCheckboxes[ID_ATTR_BLOCKS_PROJECTILES]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrBlockProjectile] = AttrBlockProjectile;
+			selectedObject->allAttrs[AttrBlockProjectile] = true;
 		}
 	}
 	if (selectedObject->isPickupable)
@@ -618,7 +686,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_IS_PICKUPABLE]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrPickupable] = AttrPickupable;
+			selectedObject->allAttrs[AttrPickupable] = true;
 		}
 	}
 	if (selectedObject->ignoreLook)
@@ -626,7 +694,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_IGNORE_LOOK]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrLook] = AttrLook;
+			selectedObject->allAttrs[AttrLook] = true;
 		}
 	}
 	if (selectedObject->isHangable)
@@ -634,7 +702,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_IS_HANGABLE]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrHangable] = AttrHangable;
+			selectedObject->allAttrs[AttrHangable] = true;
 		}
 	}
 	if (selectedObject->isLyingCorpse)
@@ -642,7 +710,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_IS_LYING_CORPSE]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrLyingCorpse] = AttrLyingCorpse;
+			selectedObject->allAttrs[AttrLyingCorpse] = true;
 		}
 	}
 	if (selectedObject->hasMount)
@@ -650,7 +718,15 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		booleanAttrCheckboxes[ID_ATTR_HAS_MOUNT]->SetValue(true);
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrMount] = AttrMount;
+			selectedObject->allAttrs[AttrMount] = true;
+		}
+	}
+	if (selectedObject->isAlwaysAnimated)
+	{
+		alwaysAnimatedCheckbox->SetValue(true);
+		if (isNewObject)
+		{
+			selectedObject->allAttrs[AttrAnimateAlways] = true;
 		}
 	}
 
@@ -663,7 +739,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		groundSpeedInput->Enable();
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrFullGround] = AttrFullGround;
+			selectedObject->allAttrs[AttrFullGround] = true;
 		}
 	}
 	else
@@ -684,7 +760,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		lightIntensityInput->Enable();
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrLight] = AttrLight;
+			selectedObject->allAttrs[AttrLight] = true;
 		}
 	}
 	else
@@ -708,7 +784,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		offsetYInput->Enable();
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrDisplacement] = AttrDisplacement;
+			selectedObject->allAttrs[AttrDisplacement] = true;
 		}
 	}
 	else
@@ -729,7 +805,7 @@ void MainWindow::setAttributeValues(bool isNewObject)
 		elevationInput->Enable();
 		if (isNewObject)
 		{
-			selectedObject->allAttrs[AttrElevation] = AttrElevation;
+			selectedObject->allAttrs[AttrElevation] = true;
 		}
 	}
 	else
@@ -743,71 +819,71 @@ void MainWindow::setAttributeValues(bool isNewObject)
 
 void MainWindow::OnToggleAttrCheckbox(wxCommandEvent & event)
 {
-	int intval = event.GetInt();
-	bool value = (bool) intval;
+	bool value = event.GetInt() != 0;
 	switch (event.GetId())
 	{
 		case ID_ATTR_IS_CONTAINER:
 			selectedObject->isContainer = value;
-			selectedObject->allAttrs[AttrContainer] = intval;
+			selectedObject->allAttrs[AttrContainer] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is container", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_STACKABLE:
 			selectedObject->isStackable = value;
-			selectedObject->allAttrs[AttrStackable] = intval;
+			selectedObject->allAttrs[AttrStackable] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is stackable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_MULTI_USE:
 			selectedObject->isMultiUse = value;
-			selectedObject->allAttrs[AttrMultiUse] = intval;
+			selectedObject->allAttrs[AttrMultiUse] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Multi-use", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_WALKABLE:
 			selectedObject->isWalkable = value;
-			selectedObject->allAttrs[AttrNotWalkable] = (value ? 0 : 1);
+			selectedObject->allAttrs[AttrNotWalkable] = !value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is walkable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_PATHABLE:
 			selectedObject->isPathable = value;
-			selectedObject->allAttrs[AttrNotPathable] = (value ? 0 : 1);
+			selectedObject->allAttrs[AttrNotPathable] = !value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is pathable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_MOVABLE:
 			selectedObject->isMovable = value;
-			selectedObject->allAttrs[AttrNotMoveable] = (value ? 0 : 1);
+			selectedObject->allAttrs[AttrNotMoveable] = !value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is movable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_BLOCKS_PROJECTILES:
 			selectedObject->blocksProjectiles = value;
-			selectedObject->allAttrs[AttrBlockProjectile] = intval;
+			selectedObject->allAttrs[AttrBlockProjectile] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Block projectiles", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_PICKUPABLE:
 			selectedObject->isPickupable = value;
-			selectedObject->allAttrs[AttrPickupable] = intval;
+			selectedObject->allAttrs[AttrPickupable] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is pickupable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IGNORE_LOOK:
 			selectedObject->ignoreLook = value;
-			selectedObject->allAttrs[AttrLook] = intval;
+			selectedObject->allAttrs[AttrLook] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Ignore look", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_HANGABLE:
 			selectedObject->isHangable = value;
-			selectedObject->allAttrs[AttrHangable] = intval;
+			selectedObject->allAttrs[AttrHangable] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is hangable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_LYING_CORPSE:
 			selectedObject->isLyingCorpse = value;
-			selectedObject->allAttrs[AttrLyingCorpse] = intval;
+			selectedObject->allAttrs[AttrLyingCorpse] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is lying corpse", value ? "on" : "off"));
 		break;
 		case ID_ATTR_HAS_MOUNT:
 			selectedObject->hasMount = value;
-			selectedObject->allAttrs[AttrMount] = intval;
+			selectedObject->allAttrs[AttrMount] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Has mount", value ? "on" : "off"));
 		break;
 	}
+	isDirty = true;
 }
 
 void MainWindow::fillObjectSprites()
@@ -864,18 +940,30 @@ void MainWindow::fillObjectSprites()
 
 void MainWindow::fillAnimationSection()
 {
-	if (!selectedObject) return;
+	if (selectedObject)
+	{
+		animationWidthInput->ChangeValue(wxString::Format("%i", selectedObject->width));
+		animationHeightInput->ChangeValue(wxString::Format("%i", selectedObject->height));
 
-	animationWidthInput->ChangeValue(wxString::Format("%i", selectedObject->width));
-	animationHeightInput->ChangeValue(wxString::Format("%i", selectedObject->height));
+		currentFrame = currentXDiv = currentYDiv = 0;
+		currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+		amountOfFramesInput->ChangeValue(wxString::Format("%i", selectedObject->phasesCount));
 
-	currentFrame = currentXDiv = currentYDiv = 0;
-	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
-	amountOfFramesInput->ChangeValue(wxString::Format("%i", selectedObject->phasesCount));
+		alwaysAnimatedCheckbox->SetValue(selectedObject->isAlwaysAnimated);
 
-	alwaysAnimatedCheckbox->SetValue(selectedObject->isAlwaysAnimated);
+		fillAnimationSprites();
+	}
+	else
+	{
+		animationWidthInput->ChangeValue(STR_ZERO);
+		animationHeightInput->ChangeValue(STR_ZERO);
 
-	fillAnimationSprites();
+		currentFrame = currentXDiv = currentYDiv = 0;
+		currentFrameNumber->SetLabelText(STR_ZERO);
+		amountOfFramesInput->ChangeValue(STR_ZERO);
+
+		alwaysAnimatedCheckbox->SetValue(false);
+	}
 }
 
 void MainWindow::buildAnimationSpriteHolders()
@@ -887,9 +975,11 @@ void MainWindow::buildAnimationSpriteHolders()
 		animationSpritesPanel->Destroy();
 	}
 	animationSpritesPanel = new wxPanel(animationPanel, -1);
-	animationSpritesSizer = new wxGridSizer(selectedObject->height, selectedObject->width, 0, 0);
+	int width = selectedObject ? selectedObject->width : 1, height = selectedObject ? selectedObject->height : 1;
+	animationSpritesSizer = new wxGridSizer(height, width, 0, 0);
 
-	for (unsigned int i = 0; i < selectedObject->width * selectedObject->height; ++i)
+	unsigned int wByH = width * height;
+	for (unsigned int i = 0; i < wByH; ++i)
 	{
 		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, *stubImage);
 		animationSpritesSizer->Add(animationSpriteBitmaps[i]);
@@ -1003,6 +1093,8 @@ void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
 
+	isDirty = true;
+
 	statusBar->SetStatusText(wxString::Format("Object width changed to %i", val));
 }
 
@@ -1020,6 +1112,8 @@ void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
 
+	isDirty = true;
+
 	statusBar->SetStatusText(wxString::Format("Object height changed to %i", val));
 }
 
@@ -1036,6 +1130,8 @@ void MainWindow::OnFramesAmountChanged(wxCommandEvent & event)
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
+
+	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format("Animation amount of frames changed to %i", val));
 }
@@ -1131,7 +1227,7 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	newObject->patternWidth = newObject->patternHeight = newObject->patternDepth = 1;
 	newObject->layersCount = newObject->phasesCount = newObject->spriteCount = 1;
 	newObject->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[1] { 0 });
-	newObject->allAttrs[AttrLast] = AttrLast;
+	newObject->allAttrs[AttrLast] = true;
 	objects->push_back(newObject);
 	selectedObject = newObject;
 	objectsListBox->Insert(wxString::Format("%i", newObject->id), objectsListBox->GetCount());
@@ -1145,6 +1241,8 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	fillObjectSprites();
 	buildAnimationSpriteHolders();
 	fillAnimationSection();
+
+	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format("New object with ID <%i> has been created in the \"%s\" category",
 	                         newObject->id, CATEGORIES[currentCategory]));
@@ -1167,12 +1265,48 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 		wxGenericStaticBitmap * staticBitmap = nullptr;
 		wxStaticText * spriteLabel = nullptr;
 		wxFileName filename;
+		wxString basename;
 		unsigned int bitmapId = 0;
+		wxString errors;
 		for (auto const & p : paths)
 		{
+			filename.Assign(p);
+			basename = filename.GetFullName();
+
+			// validating that it's a PNG format
+			fstream file;
+			file.open(p.mb_str(), ios::in | ios::binary);
+			if (file.is_open())
+			{
+				file.seekg(1);
+				char signature[3];
+				file.read(signature, 3);
+				file.close();
+				if (signature[0] != 'P' || signature[1] != 'N' || signature[2] != 'G')
+				{
+					errors.Append(wxString::Format("%s has not been imported, because it's not in PNG format\n\n", basename));
+					continue;
+				}
+			}
+			else
+			{
+				errors.Append(wxString::Format("%s has not been imported, because file cannot be opened\n\n", basename));
+				continue;
+			}
+
 			bitmapId = importedSprites.size();
 			bitmap = make_shared <wxBitmap> ();
 			bitmap->LoadFile(p, wxBITMAP_TYPE_PNG);
+			if (!bitmap->IsOk())
+			{
+				errors.Append(wxString::Format("%s has not been imported, because loading file has failed\n\n", basename));
+				continue;
+			}
+			if (bitmap->GetWidth() % 32 != 0 || bitmap->GetHeight() % 32 != 0)
+			{
+				errors.Append(wxString::Format("%s has not been imported, because its width and height must be multiplier of 32\n\n", basename));
+				continue;
+			}
 			importedSprites.push_back(bitmap);
 			staticBitmap = new wxGenericStaticBitmap(newSpritesPanel, -1, *bitmap);
 
@@ -1186,14 +1320,20 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 			staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
 
 			newSpritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
-			filename.Assign(p);
-			spriteLabel = new wxStaticText(newSpritesPanel, -1, filename.GetName());
+			spriteLabel = new wxStaticText(newSpritesPanel, -1, basename);
 			newSpritesPanelSizer->Add(spriteLabel, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 		}
 		newSpritesPanelSizer->Layout();
 		newSpritesPanel->FitInside();
 
-		if (paths.size() > 0)
+		if (errors.Length() > 0)
+		{
+			wxMessageDialog errorMsg(this, errors, "Error", wxOK | wxICON_ERROR);
+			errorMsg.SetMinSize(wxSize(300, -1));
+			errorMsg.ShowModal();
+			statusBar->SetStatusText("Errors occured while importing new files");
+		}
+		else if (paths.size() > 0)
 		{
 			if (paths.size() == 1)
 			{
@@ -1220,60 +1360,75 @@ void MainWindow::OnClickImportedOrObjectSprite(wxMouseEvent & event)
 	dragSource.DoDragDrop(true);
 }
 
+void MainWindow::OnToggleAlwaysAnimatedAttr(wxCommandEvent & event)
+{
+	bool value = event.GetInt() != 0;
+	selectedObject->isAlwaysAnimated = value;
+	selectedObject->allAttrs[AttrAnimateAlways] = value;
+
+	isDirty = true;
+
+	statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Always animated", value ? "on" : "off"));
+}
+
 void MainWindow::OnToggleIsFullGroundAttr(wxCommandEvent & event)
 {
-	int intval = event.GetInt();
-	bool value = (bool) intval;
+	bool value = event.GetInt() != 0;
 	groundSpeedLabel->Enable(value);
 	groundSpeedInput->Enable(value);
 	selectedObject->isGround = selectedObject->isFullGround = value;
-	selectedObject->allAttrs[AttrGround] = selectedObject->allAttrs[AttrFullGround] = intval;
+	selectedObject->allAttrs[AttrGround] = selectedObject->allAttrs[AttrFullGround] = value;
 	selectedObject->groundSpeed = wxAtoi(groundSpeedInput->GetValue());
+
+	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is full ground", value ? "on" : "off"));
 }
 
 void MainWindow::OnToggleHasLightAttr(wxCommandEvent & event)
 {
-	int intval = event.GetInt();
-	bool value = (bool) intval;
+	bool value = event.GetInt() != 0;
 	lightColorLabel->Enable(value);
 	lightColorPicker->Enable(value);
 	lightIntensityLabel->Enable(value);
 	lightIntensityInput->Enable(value);
 	selectedObject->isLightSource = value;
-	selectedObject->allAttrs[AttrLight] = intval;
+	selectedObject->allAttrs[AttrLight] = value;
 	// TODO: handle light color here
 	selectedObject->lightIntensity = wxAtoi(lightIntensityInput->GetValue());
+
+	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Has light", value ? "on" : "off"));
 }
 
 void MainWindow::OnToggleHasOffsetAttr(wxCommandEvent & event)
 {
-	int intval = event.GetInt();
-	bool value = (bool) intval;
+	bool value = event.GetInt() != 0;
 	offsetXLabel->Enable(value);
 	offsetXInput->Enable(value);
 	offsetYLabel->Enable(value);
 	offsetYInput->Enable(value);
 	selectedObject->hasDisplacement = value;
-	selectedObject->allAttrs[AttrDisplacement] = intval;
+	selectedObject->allAttrs[AttrDisplacement] = value;
 	selectedObject->displacementX = wxAtoi(offsetXInput->GetValue());
 	selectedObject->displacementY = wxAtoi(offsetYInput->GetValue());
+
+	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Has offset", value ? "on" : "off"));
 }
 
 void MainWindow::OnToggleHasElevationAttr(wxCommandEvent & event)
 {
-	int intval = event.GetInt();
-	bool value = (bool) intval;
+	bool value = event.GetInt() != 0;
 	elevationLabel->Enable(value);
 	elevationInput->Enable(value);
 	selectedObject->isRaised = value;
-	selectedObject->allAttrs[AttrElevation] = intval;
+	selectedObject->allAttrs[AttrElevation] = value;
 	selectedObject->elevation = wxAtoi(elevationInput->GetValue());
+
+	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Has elevation", value ? "on" : "off"));
 }
@@ -1284,6 +1439,7 @@ void MainWindow::OnGroundSpeedChanged(wxCommandEvent & event)
 	{
 		selectedObject->groundSpeed = wxAtoi(groundSpeedInput->GetValue());
 		statusBar->SetStatusText(wxString::Format("Object \"Ground speed\" value changed to %i", selectedObject->groundSpeed));
+		isDirty = true;
 	}
 }
 
@@ -1293,6 +1449,7 @@ void MainWindow::OnLightColorChanged(wxColourPickerEvent & event)
 	{
 		// TODO:
 		// event.GetColour();
+		isDirty = true;
 	}
 }
 
@@ -1302,6 +1459,7 @@ void MainWindow::OnLightIntensityChanged(wxCommandEvent & event)
 	{
 		selectedObject->lightIntensity = wxAtoi(lightIntensityInput->GetValue());
 		statusBar->SetStatusText(wxString::Format("Object \"Light intensity\" value changed to %i", selectedObject->lightIntensity));
+		isDirty = true;
 	}
 }
 
@@ -1320,6 +1478,7 @@ void MainWindow::OnOffsetXYChanged(wxCommandEvent & event)
 			selectedObject->displacementY = wxAtoi(offsetYInput->GetValue());
 			statusBar->SetStatusText(wxString::Format("Object \"Offset Y\" value changed to %i", selectedObject->displacementY));
 		}
+		isDirty = true;
 	}
 }
 
@@ -1329,6 +1488,7 @@ void MainWindow::OnElevationChanged(wxCommandEvent & event)
 	{
 		selectedObject->elevation = wxAtoi(elevationInput->GetValue());
 		statusBar->SetStatusText(wxString::Format("Object \"Elevation\" value changed to %i", selectedObject->elevation));
+		isDirty = true;
 	}
 }
 
@@ -1380,7 +1540,19 @@ void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
 
 void MainWindow::OnExit(wxCommandEvent & event)
 {
-	Close(true);
+	Close();
+}
+
+void MainWindow::OnClose(wxCloseEvent & event)
+{
+	if (event.CanVeto() && !checkDirty())
+	{
+		event.Veto();
+	}
+	else
+	{
+		Destroy();
+	}
 }
 
 void MainWindow::OnQuickGuide(wxCommandEvent & event)
@@ -1520,7 +1692,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 		mainWindow->fillObjectSprites();
 		mainWindow->fillAnimationSprites();
 
-		result = true;
+		result = mainWindow->isDirty = true;
 	}
 	else if (esi->getType() == EditorSpriteIDs::EXISTING) // existing sprite
 	{
@@ -1541,7 +1713,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 		mainWindow->fillObjectSprites();
 		mainWindow->fillAnimationSprites();
 
-		result = true;
+		result = mainWindow->isDirty = true;
 	}
 
 	// resetting cached bitmap used for selection handling
