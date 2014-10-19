@@ -3,7 +3,9 @@ FLAGS_debug=-g -O0 -Wall -std=c++11 `wx-config --cppflags`
 FLAGS_release=-O4 -std=c++11 `wx-config --cppflags`
 OBJECTS=obj/$(CONF)/NewEditor.o obj/$(CONF)/MainWindow.o obj/$(CONF)/DatSprOpenSaveDialog.o \
         obj/$(CONF)/AboutDialog.o obj/$(CONF)/QuickGuideDialog.o obj/$(CONF)/DatSprReaderWriter.o \
-        obj/$(CONF)/Settings.o obj/$(CONF)/Events.o obj/$(CONF)/Config.o obj/$(CONF)/Utils.o
+        obj/$(CONF)/ItemsOtbWriter.o obj/$(CONF)/GenerateRMEDialog.o \
+        obj/$(CONF)/Settings.o obj/$(CONF)/Events.o obj/$(CONF)/Config.o obj/$(CONF)/Utils.o \
+        obj/$(CONF)/jsoncpp.o obj/$(CONF)/pugixml.o
 RESOURCES=bin/$(CONF)/res/icons/green_arrow_left.png bin/$(CONF)/res/icons/green_arrow_top_left.png
 
 all: bin/$(CONF)/NewEditor
@@ -15,7 +17,8 @@ obj/$(CONF)/NewEditor.o: src/NewEditor.cpp src/NewEditor.h src/MainWindow.h src/
 	$(CC) $(FLAGS_$(CONF)) -c src/NewEditor.cpp -o $@
 
 obj/$(CONF)/MainWindow.o: src/MainWindow.cpp src/MainWindow.h src/DatSprOpenSaveDialog.h src/AboutDialog.h \
-                          src/DatSprReaderWriter.h src/Events.h src/Config.h src/Utils.h
+                          src/GenerateRMEDialog.h src/QuickGuideDialog.h src/DatSprReaderWriter.h src/Events.h \
+                          src/Config.h src/Utils.h
 	$(CC) $(FLAGS_$(CONF)) -c src/MainWindow.cpp -o $@
 
 obj/$(CONF)/DatSprOpenSaveDialog.o: src/DatSprOpenSaveDialog.cpp src/DatSprOpenSaveDialog.h src/Settings.h src/Interfaces.h
@@ -29,6 +32,12 @@ obj/$(CONF)/QuickGuideDialog.o: src/QuickGuideDialog.cpp src/QuickGuideDialog.h 
 
 obj/$(CONF)/DatSprReaderWriter.o: src/DatSprReaderWriter.cpp src/DatSprReaderWriter.h src/DatSprStructs.h src/Interfaces.h
 	$(CC) $(FLAGS_$(CONF)) -c src/DatSprReaderWriter.cpp -o $@
+	
+obj/$(CONF)/ItemsOtbWriter.o: src/ItemsOtbWriter.cpp src/ItemsOtbWriter.h src/DatSprStructs.h src/Interfaces.h
+	$(CC) $(FLAGS_$(CONF)) -c src/ItemsOtbWriter.cpp -o $@
+	
+obj/$(CONF)/GenerateRMEDialog.o: src/GenerateRMEDialog.cpp src/GenerateRMEDialog.h src/Settings.h src/ItemsOtbWriter.h src/jsoncpp/json.h
+	$(CC) $(FLAGS_$(CONF)) -c src/GenerateRMEDialog.cpp -o $@
 
 obj/$(CONF)/Settings.o: src/Settings.cpp src/Settings.h
 	$(CC) $(FLAGS_$(CONF)) -c src/Settings.cpp -o $@
@@ -41,6 +50,12 @@ obj/$(CONF)/Config.o: src/Config.cpp src/Config.h
 
 obj/$(CONF)/Utils.o: src/Utils.cpp src/Utils.h
 	$(CC) $(FLAGS_$(CONF)) -c src/Utils.cpp -o $@
+	
+obj/$(CONF)/pugixml.o: src/pugixml/pugixml.cpp src/pugixml/pugixml.hpp
+	$(CC) $(FLAGS_$(CONF)) -c src/pugixml/pugixml.cpp -o $@
+	
+obj/$(CONF)/jsoncpp.o: src/jsoncpp/jsoncpp.cpp src/jsoncpp/json.h
+	$(CC) $(FLAGS_$(CONF)) -c src/jsoncpp/jsoncpp.cpp -o $@
 
 bin/$(CONF)/res/icons/green_arrow_left.png: res/icons/green_arrow_left.png
 	mkdir -p bin/$(CONF)/res/icons

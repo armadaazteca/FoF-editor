@@ -14,6 +14,7 @@
 #include "Settings.h"
 #include "MainWindow.h"
 #include "DatSprOpenSaveDialog.h"
+#include "GenerateRMEDialog.h"
 #include "QuickGuideDialog.h"
 #include "AboutDialog.h"
 #include "DatSprReaderWriter.h"
@@ -30,6 +31,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_MENU(wxID_OPEN, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_SAVE, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_EXIT, MainWindow::OnExit)
+	EVT_MENU(ID_MENU_GENERATE_RME, MainWindow::OnGenerateRMEDialog)
 	EVT_MENU(ID_MENU_QUICK_GUIDE, MainWindow::OnQuickGuide)
 	EVT_MENU(wxID_ABOUT, MainWindow::OnAbout)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_LOADED, MainWindow::OnDatSprLoaded)
@@ -78,11 +80,14 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	menuFile->Append(wxID_SAVE);
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
-	wxMenu * menuHelp = new wxMenu();
+	auto menuTools = new wxMenu();
+	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources");
+	auto menuHelp = new wxMenu();
 	menuHelp->Append(ID_MENU_QUICK_GUIDE, "Quick guide");
 	menuHelp->Append(wxID_ABOUT);
-	wxMenuBar * menuBar = new wxMenuBar();
+	auto menuBar = new wxMenuBar();
 	menuBar->Append(menuFile, "&File");
+	menuBar->Append(menuTools, "&Tools");
 	menuBar->Append(menuHelp, "&Help");
 	SetMenuBar(menuBar);
 
@@ -1553,6 +1558,12 @@ void MainWindow::OnClose(wxCloseEvent & event)
 	{
 		Destroy();
 	}
+}
+
+void MainWindow::OnGenerateRMEDialog(wxCommandEvent & event)
+{
+	auto generateRMEDialog = new GenerateRMEDialog(this);
+	generateRMEDialog->ShowModal();
 }
 
 void MainWindow::OnQuickGuide(wxCommandEvent & event)

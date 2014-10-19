@@ -10,7 +10,7 @@ QuickGuideDialog::QuickGuideDialog(wxWindow * parent) : wxDialog(parent, wxID_AN
 	auto vbox = new wxBoxSizer(wxVERTICAL);
 
   const char * guideText = "To create new files from scratch use \"File -> New\" menu or Ctrl+N hotkey.\n\n"
-	                         "To open existing files use \"File -> New\" menu or Ctrl+O hotkey.\n\n"
+	                         "To open existing files use \"File -> Open\" menu or Ctrl+O hotkey.\n\n"
 	                         "To save files use \"File -> Save\" menu or Ctrl+S hotkey.\n\n"
                            "For opening and saving you will need to provide paths to files. If at least one of the sprites "
                            "currently being edited contains alpha-transparency, you must check corresponding "

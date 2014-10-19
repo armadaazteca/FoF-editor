@@ -656,37 +656,3 @@ shared_ptr <DatSprReaderWriter::DatObjectList> DatSprReaderWriter::getObjects(Da
 	}
 	return nullptr;
 }
-
-/*DatSprReaderWriter::~DatSprReaderWriter()
-{
-	shared_ptr <DatObject> object = nullptr;
-	for (auto & v : *items)
-	{
-		delete [] v->marketName;
-		delete [] v->spriteIDs;
-	}
-	for (auto & v : *creatures)
-	{
-		delete [] v->marketName;
-		delete [] v->spriteIDs;
-	}
-	for (auto & v : *effects)
-	{
-		delete [] v->marketName;
-		delete [] v->spriteIDs;
-	}
-	for (auto & v : *projectiles)
-	{
-		delete [] v->marketName;
-		delete [] v->spriteIDs;
-	}
-
-	shared_ptr <Sprite> sprite = nullptr;
-	for (auto & kv : *sprites)
-	{
-		sprite = kv.second;
-		delete [] sprite->rgb;
-		delete [] sprite->alpha;
-		delete [] sprite->compressedData;
-	}
-}*/

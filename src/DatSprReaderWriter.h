@@ -32,13 +32,7 @@ public:
 	inline unsigned int incrementMaxSpriteId() { return maxSpriteId++; } // return first, then increment
 
 private:
-	bool hasData = false;
-	fstream file;
-	unsigned int datSignature = 0, sprSignature = 0;
-	unsigned short itemsCount = 0, creaturesCount = 0, effectsCount = 0, projectilesCount = 0;
-	shared_ptr <DatObjectList> items = nullptr, creatures = nullptr, effects = nullptr, projectiles = nullptr;
-	shared_ptr <SpriteMap> sprites = nullptr;
-	unsigned int maxSpriteId = 0;
+	DatSprReaderWriter() {}
 
 	unsigned char readByte();
 	unsigned short readU16();
@@ -50,7 +44,13 @@ private:
 	void writeU32(unsigned int u32);
 	void writeString(char * str);
 
-	//~DatSprReaderWriter();
+	bool hasData = false;
+	fstream file;
+	unsigned int datSignature = 0, sprSignature = 0;
+	unsigned short itemsCount = 0, creaturesCount = 0, effectsCount = 0, projectilesCount = 0;
+	shared_ptr <DatObjectList> items = nullptr, creatures = nullptr, effects = nullptr, projectiles = nullptr;
+	shared_ptr <SpriteMap> sprites = nullptr;
+	unsigned int maxSpriteId = 0;
 };
 
 #endif // _DAT_SPR_READER_WRITER_H_

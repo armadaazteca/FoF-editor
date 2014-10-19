@@ -1,0 +1,47 @@
+Editor fields / attributes for items.otb and various .xml files generation: 
+
+items.otb
+=========
+group - can be either 'Ground', 'Container', 'Fluid', 'Splash', 'Other' or 'Deprecated'.
+Not sure it has some serious meaningful for RME, but at least isGroundTile() used in several places, so better to include it.
+Suggest using 'Ground' group by default for those items which have 'isFullGround' attribute, 'Other' group otherwise.
+
+items.xml
+=========
+id - item id obviously
+* sometimes there is 'toid' and 'fromid' instead of single id, looks like it's for merging several items into one
+
+article - either 'a' or 'an', 'a' is default
+name - string name of the item
+
+* there is also set of nested attribute elements, not sure all of them are needed for now, but at least we'll need
+<attribute key="floorchange" value="down | up" />
+for ladders / holes.
+Also there is 'description' attribute that may be useful in some cases.
+
+<attribute key="decayTo" value="483" />
+does look like it's for one item transforming into another and 'duration' attribute may be something like transform time.
+
+Also it may make sense to write
+<attribute key="blockprojectile" value="1" />
+If corresponding .dat attribute is set. 
+
+creatures.xml
+=============
+name - string name of the creature
+type - mostly 'monster', don't even know whether there will be other types of creature, NPCs maybe.
+looktype - id of the creature
+lookhead, lookbody etc. is probably for changing so-called 'outfit', looks like it's some colors of cloths etc.
+
+materials.xml
+=============
+Would suggest to write it statically. It actually should just declare inclusion of other useful files:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<materials>
+	<include file="borders.xml"/>
+	<include file="grounds.xml"/>
+	<include file="walls.xml"/>
+	<include file="doodads.xml"/>
+	<include file="tilesets.xml"/>
+</materials>

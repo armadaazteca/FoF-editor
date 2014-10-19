@@ -97,7 +97,8 @@ private:
 
 	enum MenuIDs
 	{
-		ID_MENU_QUICK_GUIDE = 300
+		ID_MENU_GENERATE_RME = 300,
+		ID_MENU_QUICK_GUIDE
 	};
 
 	enum OrientationToXDiv
@@ -178,6 +179,7 @@ private:
 	void OnElevationChanged(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnClose(wxCloseEvent & event);
+	void OnGenerateRMEDialog(wxCommandEvent & event);
 	void OnQuickGuide(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	bool checkDirty();

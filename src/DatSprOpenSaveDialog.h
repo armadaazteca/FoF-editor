@@ -16,7 +16,7 @@ public:
 	void updateProgress(double value);
 	inline virtual ~DatSprOpenSaveDialog() {};
 private:
-	enum MenuItemIds
+	enum ButtonIDs
 	{
 		ID_BROWSE_DAT_BUTTON = 1,
 		ID_BROWSE_SPR_BUTTON = 2,
