@@ -3,15 +3,20 @@
 #include <wx/wx.h>
 #endif
 #include <wx/filename.h>
-#include "jsoncpp/json.h"
+#include "Events.h"
 #include "Settings.h"
+#include "DatSprReaderWriter.h"
 #include "ItemsOtbWriter.h"
 #include "GenerateRMEDialog.h"
 
-GenerateRMEDialog::GenerateRMEDialog(wxWindow * parent)
-	: wxDialog(parent, -1, "Generate RME resources")
+wxBEGIN_EVENT_TABLE(GenerateRMEDialog, wxDialog)
+	EVT_BUTTON(ID_BROWSE_BUTTON, GenerateRMEDialog::OnClickBrowseButton)
+	EVT_BUTTON(ID_GENERATE_BUTTON, GenerateRMEDialog::OnClickGenerateButton)
+wxEND_EVENT_TABLE()
+
+GenerateRMEDialog::GenerateRMEDialog(wxWindow * parent) : wxDialog(parent, -1, "Generate RME resources")
 {
-	auto vbox = new wxBoxSizer(wxVERTICAL);
+	auto vbox = new wxBoxSizer(wxVERTICAL), vboxwrap = new wxBoxSizer(wxVERTICAL);
 	Settings & settings = Settings::getInstance();
 
 	const wchar_t * toolDesc = wxT(
@@ -34,6 +39,10 @@ GenerateRMEDialog::GenerateRMEDialog(wxWindow * parent)
 
 	vbox->Add(hbox);
 
+	overwriteCb = new wxCheckBox(this, wxID_ANY, "Overwrite existing files");
+	overwriteCb->SetValue(settings.get("generateRMEOverwrite").IsSameAs("yes"));
+	vbox->Add(overwriteCb, 0, wxALL, 5);
+
 	progress = new wxGauge(this, -1, 100);
 	vbox->Add(progress, 1, wxALL | wxEXPAND, 5);
 
@@ -41,26 +50,95 @@ GenerateRMEDialog::GenerateRMEDialog(wxWindow * parent)
 	generateButton->SetFocus();
 	vbox->Add(generateButton, 0, wxALL | wxALIGN_RIGHT, 5);
 
-	SetSizer(vbox);
-	vbox->Layout();
-	vbox->Fit(this);
+	vboxwrap->Add(vbox, 0, wxALL, 5);
+
+	SetSizer(vboxwrap);
+	vboxwrap->Layout();
+	vboxwrap->Fit(this);
 	Center();
+}
+
+void GenerateRMEDialog::OnClickBrowseButton(wxCommandEvent & event)
+{
+	Settings & settings = Settings::getInstance();
+	const wxString & pathStr = settings.get("generateRMEPath");
+	wxDirDialog browseDialog(this, "Choose path for generated files", pathStr);
+	if (browseDialog.ShowModal() == wxID_OK)
+	{
+		dataPath->Replace(0, dataPath->GetLastPosition(), browseDialog.GetPath());
+	}
+}
+
+void GenerateRMEDialog::OnClickGenerateButton(wxCommandEvent & event)
+{
+	const wxString & dataPathStr = dataPath->GetValue();
+	bool allowOverwrite = overwriteCb->GetValue();
+	Settings & settings = Settings::getInstance();
+	if (dataPathStr.Length() == 0)
+	{
+		wxMessageDialog error(this, "Path cannot be empty", "Error", wxOK | wxICON_ERROR);
+		error.ShowModal();
+		return;
+	}
+
+	settings.set("generateRMEPath", dataPathStr);
+	settings.set("generateRMEOverwrite", allowOverwrite ? "yes" : "no");
+	settings.save();
+
+	wxFileName filename(dataPathStr);
+	if (!filename.DirExists())
+	{
+		wxMessageDialog error(this, "Directory does not exist", "Error", wxOK | wxICON_ERROR);
+		error.ShowModal();
+		return;
+	}
+
+	auto items = DatSprReaderWriter::getInstance().getObjects(CategoryItem);
+	if (items->size() == 0)
+	{
+		wxMessageDialog error(this, "Items list is empty, nothing to write.", "Error", wxOK | wxICON_ERROR);
+		error.ShowModal();
+		return;
+	}
+
+
+	currentWriting = WRITING_ITEMS_OTB;
+	filename.AppendDir(filename.GetFullName());
+	filename.SetName("items");
+	filename.SetExt("otb");
+	if (!allowOverwrite && filename.FileExists())
+	{
+		wxMessageBox("items.otb already exists, aborting", "Error", wxOK | wxICON_ERROR);
+		return;
+	}
+
+	if (ItemsOtbWriter::getInstance().writeItemsOtb(items, filename.GetFullPath(), this))
+	{
+		// notifying main window that files have been saved
+		wxCommandEvent event(RME_RES_GENERATED, 1);
+		wxPostEvent(m_parent, event);
+		Close();
+	}
+	else
+	{
+		wxMessageBox("The items.otb file cannot be written", "Error", wxOK | wxICON_ERROR);
+	}
 }
 
 void GenerateRMEDialog::updateProgress(double value)
 {
-	/*float percentageFactor = readOrSaveAlphaCheckbox->GetValue() ? 33.333 : 50;
-	if (currentLoading == LOADING_DAT)
+	float percentageFactor = 33.333;
+	if (currentWriting == WRITING_ITEMS_OTB)
 	{
 		progress->SetValue(ceil(value * percentageFactor));
 	}
-	else if (currentLoading == LOADING_SPR)
+	else if (currentWriting == WRITING_ITEMS_XML)
 	{
 		progress->SetValue(ceil(percentageFactor + value * percentageFactor));
 	}
-	else if (currentLoading == LOADING_ALP)
+	else if (currentWriting == WRITING_CREATURES_XML)
 	{
 		progress->SetValue(ceil(percentageFactor * 2 + value * percentageFactor));
-	}*/
+	}
 	wxTheApp->Yield();
 }

@@ -76,7 +76,7 @@ public:
 	typedef vector <shared_ptr <DatObject>> DatObjectList;
 
 	static ItemsOtbWriter & getInstance();
-	bool writeItemsOtb(DatObjectList items, const wxString & filename, ProgressUpdatable * progressUpdatable);
+	bool writeItemsOtb(shared_ptr <DatObjectList> items, const wxString & filename, ProgressUpdatable * progressUpdatable);
 
 private:
 	ItemsOtbWriter() {}

@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <fstream>
+#include "Interfaces.h"
 #include "DatSprStructs.h"
 
 using namespace std;

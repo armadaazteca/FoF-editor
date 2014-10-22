@@ -3,7 +3,6 @@
 #include <wx/wx.h>
 #include <wx/memory.h>
 #endif
-#include "Interfaces.h"
 #include "DatSprReaderWriter.h"
 
 DatSprReaderWriter & DatSprReaderWriter::getInstance()

@@ -13,9 +13,9 @@ ItemsOtbWriter & ItemsOtbWriter::getInstance()
 	return instance;
 }
 
-bool ItemsOtbWriter::writeItemsOtb(DatObjectList items, const wxString & filename, ProgressUpdatable * progressUpdatable)
+bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename.mb_str(), ios::in | ios::binary);
+	file.open(filename.mb_str(), ios::out | ios::binary);
 	if (file.is_open())
 	{
 		writeU32(0); // write 4 bytes for file version, they aren't used really, it seems
@@ -38,7 +38,8 @@ bool ItemsOtbWriter::writeItemsOtb(DatObjectList items, const wxString & filenam
 		delete [] zeros;
 
 		// writing actual items
-		for (auto & item : items)
+		unsigned int writings = 0, total = items->size();
+		for (auto & item : *items)
 		{
 			writeByte(NODE_START);
 
@@ -87,6 +88,10 @@ bool ItemsOtbWriter::writeItemsOtb(DatObjectList items, const wxString & filenam
 			}
 
 			writeByte(NODE_END);
+
+			if (file.bad()) return false;
+
+			progressUpdatable->updateProgress(++writings / (double) total);
 		}
 
 		writeByte(NODE_END); // closing root node

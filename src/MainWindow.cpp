@@ -14,6 +14,7 @@
 #include "Settings.h"
 #include "MainWindow.h"
 #include "DatSprOpenSaveDialog.h"
+#include "AdvancedAttributesDialog.h"
 #include "GenerateRMEDialog.h"
 #include "QuickGuideDialog.h"
 #include "AboutDialog.h"
@@ -31,11 +32,14 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_MENU(wxID_OPEN, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_SAVE, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_EXIT, MainWindow::OnExit)
+	EVT_MENU(ID_MENU_EDIT_ADVANCED_ATTRS, MainWindow::OnAdvancedAttributesDialog)
 	EVT_MENU(ID_MENU_GENERATE_RME, MainWindow::OnGenerateRMEDialog)
 	EVT_MENU(ID_MENU_QUICK_GUIDE, MainWindow::OnQuickGuide)
 	EVT_MENU(wxID_ABOUT, MainWindow::OnAbout)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_LOADED, MainWindow::OnDatSprLoaded)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_SAVED, MainWindow::OnDatSprSaved)
+	EVT_COMMAND(wxID_ANY, RME_RES_GENERATED, MainWindow::OnRMEResourcesGenerated)
+	EVT_COMMAND(wxID_ANY, ADV_ATTRS_CHANGED, MainWindow::OnAdvancedAttributesChanged)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
 	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
@@ -74,15 +78,19 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	statusBar->SetStatusText("\"File -> New\" or Ctrl+N to create new files; \"File -> Open\" or Ctrl+O to open existing files");
 
 	// constructing main menu
-	auto menuFile = new wxMenu();
+	menuFile = new wxMenu();
 	menuFile->Append(wxID_NEW);
 	menuFile->Append(wxID_OPEN);
 	menuFile->Append(wxID_SAVE);
+	menuFile->FindChildItem(wxID_SAVE)->Enable(false);
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
-	auto menuTools = new wxMenu();
-	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources");
-	auto menuHelp = new wxMenu();
+	menuTools = new wxMenu();
+	menuTools->Append(ID_MENU_EDIT_ADVANCED_ATTRS, "Edit advanced attributes...");
+	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources...");
+	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable(false);
+	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable(false);
+	menuHelp = new wxMenu();
 	menuHelp->Append(ID_MENU_QUICK_GUIDE, "Quick guide");
 	menuHelp->Append(wxID_ABOUT);
 	auto menuBar = new wxMenuBar();
@@ -425,6 +433,10 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 	booleanAttrsPanel->Disable();
 	valueAttrsPanel->Disable();
 
+	menuFile->FindChildItem(wxID_SAVE)->Enable();
+	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable();
+	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable();
+
 	DatSprReaderWriter::getInstance().initNewData();
 	mainPanel->Enable();
 
@@ -477,6 +489,10 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 	fillObjectSprites();
 	buildAnimationSpriteHolders();
 	fillAnimationSection();
+
+	menuFile->FindChildItem(wxID_SAVE)->Enable();
+	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable();
+	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable();
 
 	statusBar->SetStatusText("Files have been loaded successfully");
 }
@@ -1560,10 +1576,43 @@ void MainWindow::OnClose(wxCloseEvent & event)
 	}
 }
 
+void MainWindow::OnAdvancedAttributesDialog(wxCommandEvent & event)
+{
+	if (currentCategory == CategoryItem || currentCategory == CategoryCreature)
+	{
+		if (selectedObject)
+		{
+			AdvancedAttributesDialog dialog(this, currentCategory, selectedObject->id);
+			dialog.ShowModal();
+		}
+		else
+		{
+			wxMessageBox("No object selected to edit", "Error", wxOK | wxICON_ERROR);
+		}
+	}
+	else
+	{
+		wxMessageBox("Advanced attributes can only be edited for objects in \"Items\" and \"Creatures\" categories",
+		             "Error", wxOK | wxICON_ERROR);
+	}
+}
+
+void MainWindow::OnAdvancedAttributesChanged(wxCommandEvent & event)
+{
+	isDirty = true;
+	const wchar_t * msg = wxT("Advanced attributes of the object <%i> have been modified");
+	statusBar->SetStatusText(wxString::Format(msg, selectedObject->id));
+}
+
 void MainWindow::OnGenerateRMEDialog(wxCommandEvent & event)
 {
 	auto generateRMEDialog = new GenerateRMEDialog(this);
 	generateRMEDialog->ShowModal();
+}
+
+void MainWindow::OnRMEResourcesGenerated(wxCommandEvent & event)
+{
+	statusBar->SetStatusText("RME resources have been generated successfully");
 }
 
 void MainWindow::OnQuickGuide(wxCommandEvent & event)

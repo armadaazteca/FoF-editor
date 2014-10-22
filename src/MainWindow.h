@@ -97,7 +97,8 @@ private:
 
 	enum MenuIDs
 	{
-		ID_MENU_GENERATE_RME = 300,
+		ID_MENU_EDIT_ADVANCED_ATTRS = 300,
+		ID_MENU_GENERATE_RME,
 		ID_MENU_QUICK_GUIDE
 	};
 
@@ -117,6 +118,7 @@ private:
 
 	shared_ptr <DatObject> selectedObject = nullptr;
 
+	wxMenu * menuFile, * menuTools, * menuHelp = nullptr;
 	wxPanel * mainPanel = nullptr;
 	wxStatusBar * statusBar = nullptr;
 	wxComboBox * categoryComboBox = nullptr;
@@ -179,7 +181,10 @@ private:
 	void OnElevationChanged(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnClose(wxCloseEvent & event);
+	void OnAdvancedAttributesDialog(wxCommandEvent & event);
+	void OnAdvancedAttributesChanged(wxCommandEvent & event);
 	void OnGenerateRMEDialog(wxCommandEvent & event);
+	void OnRMEResourcesGenerated(wxCommandEvent & event);
 	void OnQuickGuide(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	bool checkDirty();

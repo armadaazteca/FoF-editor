@@ -1,4 +1,6 @@
-- wheel-scrolling for objects listbox
+- possibility to delete objects
+- context menu for object sprite list to delete or export into png 
+- wheel-scrolling for objects listbox (works in Windows now, but doesn't work in Linux)
 
 Future work:
 - support for separate layer editing, field for layers number, checkbox for 'blend layers'

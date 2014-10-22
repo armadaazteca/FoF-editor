@@ -16,29 +16,30 @@ public:
 	void updateProgress(double value);
 	inline virtual ~DatSprOpenSaveDialog() {};
 private:
-	enum ButtonIDs
+	enum ControlIDs
 	{
 		ID_BROWSE_DAT_BUTTON = 1,
-		ID_BROWSE_SPR_BUTTON = 2,
-		ID_BROWSE_ALP_BUTTON = 3,
-		ID_READ_SAVE_ALPHA_CHECKBOX = 4,
-		ID_OPEN = 5,
-		ID_SAVE = 6
+		ID_BROWSE_SPR_BUTTON,
+		ID_BROWSE_ALP_BUTTON,
+		ID_BROWSE_AOA_BUTTON,
+		ID_READ_SAVE_ATTRS_CHECKBOX,
+		ID_READ_SAVE_ALPHA_CHECKBOX
 	};
 	void OnClickBrowseButton(wxCommandEvent & event);
 	void OnClickOpenSaveButton(wxCommandEvent & event);
 	void OnChangeReadSaveAlphaCheckbox(wxCommandEvent & event);
+	void OnChangeReadSaveAttrsCheckbox(wxCommandEvent & event);
 	wxDECLARE_EVENT_TABLE();
 
 	unsigned int mode = MODE_OPEN;
-	wxTextCtrl * datPath = nullptr, * sprPath = nullptr, * alpPath = nullptr;
-	wxStaticText * alpLabel = nullptr;
-	wxButton * alpButton = nullptr;
-	wxCheckBox * readOrSaveAlphaCheckbox = nullptr;
+	wxTextCtrl * datPath = nullptr, * sprPath = nullptr, * alpPath = nullptr, * aoaPath = nullptr;
+	wxStaticText * alpLabel = nullptr, * aoaLabel = nullptr;
+	wxButton * alpButton = nullptr, * aoaButton = nullptr;
+	wxCheckBox * readOrSaveAlphaCheckbox = nullptr, * readOrSaveAttrsCheckbox = nullptr;
 	wxGauge * progress = nullptr;
 
-	enum Loading { LOADING_DAT, LOADING_SPR, LOADING_ALP };
-	Loading currentLoading = LOADING_DAT;
+	int progressStages = 0, currentProgressStage = 0;
+	float percentsPerStage = 0;
 };
 
 #endif // _DAT_SPR_OPEN_DIALOG_H_

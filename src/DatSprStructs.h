@@ -59,6 +59,32 @@ enum DatObjectAttr : unsigned char
 	AttrLast = 255
 };
 
+enum ItemGroup
+{
+	ITEM_GROUP_NONE = 0,
+	ITEM_GROUP_GROUND,
+	ITEM_GROUP_CONTAINER,
+	ITEM_GROUP_WEAPON,
+	ITEM_GROUP_AMMUNITION,
+	ITEM_GROUP_ARMOR,
+	ITEM_GROUP_RUNE,
+	ITEM_GROUP_TELEPORT,
+	ITEM_GROUP_MAGICFIELD,
+	ITEM_GROUP_WRITEABLE,
+	ITEM_GROUP_KEY,
+	ITEM_GROUP_SPLASH,
+	ITEM_GROUP_FLUID,
+	ITEM_GROUP_DOOR,
+	ITEM_GROUP_DEPRECATED,
+	ITEM_GROUP_LAST
+};
+
+enum ItemArticles { ARTICLE_A, ARTICLE_AN };
+
+enum ItemFloorChange { FLOOR_CHANGE_NONE, FLOOR_CHANGE_DOWN, FLOOR_CHANGE_UP };
+
+enum CreatureType { CREATURE_MONSTER, CREATURE_NPC };
+
 struct DatObject
 {
 	// attributes
@@ -105,6 +131,13 @@ struct Sprite
 	unique_ptr <unsigned char[]> alpha = nullptr;
 	unsigned short compressedDataSize = 0;
 	unique_ptr <unsigned char[]> compressedData = nullptr;
+};
+
+struct AdvancedObjectAttributes
+{
+	unsigned char group = 255; // non-existing group by default, should fallback to 'Other'
+	unique_ptr <char[]> name = nullptr, description = nullptr;
+	unsigned char article = ARTICLE_A, floorChange = FLOOR_CHANGE_NONE, creatureType = CREATURE_MONSTER;
 };
 
 #endif // _DAT_SPR_STRUCTS_H_
