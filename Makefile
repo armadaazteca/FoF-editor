@@ -43,7 +43,8 @@ obj/$(CONF)/QuickGuideDialog.o: src/QuickGuideDialog.cpp src/QuickGuideDialog.h 
 obj/$(CONF)/DatSprReaderWriter.o: src/DatSprReaderWriter.cpp src/DatSprReaderWriter.h src/DatSprStructs.h src/Interfaces.h
 	$(CC) $(FLAGS_$(CONF)) -c src/DatSprReaderWriter.cpp -o $@
 	
-obj/$(CONF)/ItemsOtbWriter.o: src/ItemsOtbWriter.cpp src/ItemsOtbWriter.h src/DatSprStructs.h src/Interfaces.h
+obj/$(CONF)/ItemsOtbWriter.o: src/ItemsOtbWriter.cpp src/ItemsOtbWriter.h src/AdvancedAttributesManager.h \
+                              src/DatSprStructs.h src/Interfaces.h
 	$(CC) $(FLAGS_$(CONF)) -c src/ItemsOtbWriter.cpp -o $@
 	
 obj/$(CONF)/XmlWriter.o: src/XmlWriter.cpp src/XmlWriter.h src/DatSprStructs.h src/Interfaces.h \

@@ -2,10 +2,9 @@
 - wheel-scrolling for objects listbox (works in Windows now, but doesn't work in Linux)
 
 Future work:
-- support for separate layer editing, field for layers number, checkbox for 'blend layers'
+- update help and quick guide according to latest modifications
 - think of how to handle light color attribute properly
-- some bug when increasing object width or height and then decreasing again
+- undo / redo functions
 - possibility to export particular 32x32 sprites or full composed picture into png
 - possibly add menu item to clean-up unused sprites
-- undo / redo functions
 - possibly autosave or auto-backup feature

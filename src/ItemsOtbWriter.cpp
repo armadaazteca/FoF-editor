@@ -3,6 +3,7 @@
 #include <wx/wx.h>
 #include <wx/memory.h>
 #endif
+#include "AdvancedAttributesManager.h"
 #include "ItemsOtbWriter.h"
 
 const char * ItemsOtbWriter::OTB_VERSION_STR = "OTB 3.40.42-9.60";
@@ -18,8 +19,10 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 	file.open(filename.mb_str(), ios::out | ios::binary);
 	if (file.is_open())
 	{
+		auto & itemAttributes = AdvancedAttributesManager::getInstance().getCategoryAttributes(CategoryItem);
+
 		writeU32(0); // write 4 bytes for file version, they aren't used really, it seems
-		writeByte(NODE_START);
+		file.put(NODE_START);
 		writeByte(0); // type info, seems to be unused
 		writeU32(0); // some flags maybe, also looks unused
 		writeByte(ROOT_ATTR_VERSION); // version attribute
@@ -39,11 +42,26 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 
 		// writing actual items
 		unsigned int writings = 0, total = items->size();
+		shared_ptr <AdvancedObjectAttributes> attrs = nullptr;
 		for (auto & item : *items)
 		{
-			writeByte(NODE_START);
+			attrs = itemAttributes[item->id];
 
-			writeByte(1); // TODO: here should be 'group' byte, 1 is for 'Ground'
+			file.put(NODE_START);
+
+			// writing group byte
+			if (attrs && attrs->group)
+			{
+				writeByte(attrs->group);
+			}
+			else if (item->isGround || item->isFullGround)
+			{
+				writeByte(ITEM_GROUP_GROUND);
+			}
+			else
+			{
+				writeByte(ITEM_GROUP_NONE);
+			}
 
 			// writing flags
 			unsigned int flags = 0;
@@ -87,14 +105,14 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 				writeU16(item->lightColor);
 			}
 
-			writeByte(NODE_END);
+			file.put(NODE_END);
 
 			if (file.bad()) return false;
 
 			progressUpdatable->updateProgress(++writings / (double) total);
 		}
 
-		writeByte(NODE_END); // closing root node
+		file.put(NODE_END); // closing root node
 
 		progressUpdatable->updateProgress(1);
 
@@ -106,15 +124,21 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 
 void ItemsOtbWriter::writeByte(unsigned char byte)
 {
-	file.write((char *) &byte, 1);
+	if (byte == NODE_START || byte == NODE_END || byte == ESCAPE_CHAR) file.put(ESCAPE_CHAR);
+	file.put(byte);
 }
 
 void ItemsOtbWriter::writeU16(unsigned short u16)
 {
-	file.write((char *) &u16, 2);
+	unsigned char * bytes = (unsigned char *) &u16;
+	// writing bytes separately to escape properly
+	writeByte(bytes[0]);
+	writeByte(bytes[1]);
 }
 
 void ItemsOtbWriter::writeU32(unsigned int u32)
 {
-	file.write((char *) &u32, 4);
+	unsigned char * bytes = (unsigned char *) &u32;
+	// writing bytes separately to escape properly
+	for (int i = 0; i < 4; ++i) writeByte(bytes[i]);
 }

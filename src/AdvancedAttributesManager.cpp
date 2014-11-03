@@ -2,6 +2,8 @@
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
 #endif
+#include <wx/wfstream.h>
+#include <wx/zipstrm.h>
 #include <string>
 #include "jsoncpp/json.h"
 #include "Events.h"
@@ -36,8 +38,8 @@ void AdvancedAttributesManager::removeAttributes(DatObjectCategory category, uns
 
 bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename.mb_str(), ios::in);
-	if (file.is_open())
+	wxFileInputStream file(filename);
+	if (file.IsOk())
 	{
 		auto & itemAttributes = allAttributes[CategoryItem];
 		auto & creatureAttributes = allAttributes[CategoryCreature];
@@ -47,7 +49,13 @@ bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatabl
 
 		Json::Value root;
 		Json::Reader reader;
-		reader.parse(file, root);
+
+		wxZipInputStream zip(file);
+		auto entry = zip.GetNextEntry();
+		auto len = entry->GetSize();
+		char * buf = new char[len];
+		zip.Read(buf, len);
+		reader.parse(buf, root);
 		unsigned int readings = 0, total = root["atotal"].asUInt();
 		Json::Value itemAttrs = root["itemAttributes"];
 		Json::Value creatureAttrs = root["creatureAttributes"];
@@ -90,7 +98,6 @@ bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatabl
 
 		progressUpdatable->updateProgress(1);
 
-		file.close();
 		return true;
 	}
 	return false;
@@ -98,8 +105,8 @@ bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatabl
 
 bool AdvancedAttributesManager::save(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
-	file.open(filename.mb_str(), ios::out);
-	if (file.is_open())
+	wxFileOutputStream file(filename);
+	if (file.IsOk())
 	{
 		auto & itemAttributes = allAttributes[CategoryItem];
 		auto & creatureAttributes = allAttributes[CategoryCreature];
@@ -142,9 +149,18 @@ bool AdvancedAttributesManager::save(const wxString & filename, ProgressUpdatabl
 
 		progressUpdatable->updateProgress(1);
 
-		file << root;
+		Json::StyledWriter writer;
+		const string & jsonStr = writer.write(root);
 
-		file.close();
+		wxZipOutputStream zip(file, 9);
+		wxFileName fn(filename);
+		fn.SetExt("json");
+		zip.PutNextEntry(fn.GetFullName());
+		zip.Write(jsonStr.c_str(), jsonStr.length());
+		zip.CloseEntry();
+		zip.Close();
+		file.Close();
+
 		return true;
 	}
 	return false;

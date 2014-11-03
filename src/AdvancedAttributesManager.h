@@ -3,7 +3,6 @@
 
 #include <memory>
 #include <map>
-#include <fstream>
 #include "Interfaces.h"
 #include "DatSprStructs.h"
 
@@ -26,7 +25,6 @@ private:
 	AdvancedAttributesManager() {}
 
 	map <DatObjectCategory, AdvancedAttributesMap> allAttributes;
-	fstream file;
 };
 
 #endif // _ADVANCED_ATTRIBUTES_MANAGER_H_
