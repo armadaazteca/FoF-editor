@@ -96,6 +96,8 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 
 		writeByte(NODE_END); // closing root node
 
+		progressUpdatable->updateProgress(1);
+
 		file.close();
 		return true;
 	}

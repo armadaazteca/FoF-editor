@@ -6,6 +6,7 @@
 #include <wx/generic/statbmpg.h>
 #include <wx/dnd.h>
 #include <wx/clrpicker.h>
+#include <wx/spinctrl.h>
 #include "DatSprStructs.h"
 
 using namespace std;
@@ -74,9 +75,20 @@ private:
 		ID_NEXT_FRAME_BUTTON,
 		ID_ANIM_WIDTH_INPUT,
 		ID_ANIM_HEIGHT_INPUT,
+		ID_PATTERN_WIDTH_INPUT,
+		ID_PATTERN_HEIGHT_INPUT,
+		ID_PREV_XDIV_BUTTON,
+		ID_NEXT_XDIV_BUTTON,
+		ID_PREV_YDIV_BUTTON,
+		ID_NEXT_YDIV_BUTTON,
+		ID_LAYERS_COUNT_INPUT,
+		ID_PREV_LAYER_BUTTON,
+		ID_NEXT_LAYER_BUTTON,
 		ID_FRAMES_AMOUNT_INPUT,
 		ID_ALWAYS_ANIMATED_CHECKBOX,
+		ID_BLEND_LAYERS_CHECKBOX,
 		ID_NEW_OBJECT_BUTTON,
+		ID_DELETE_OBJECT_BUTTON,
 		ID_IMPORT_SPRITES_BUTTON,
 		ID_IMPORTED_SPRITE
 	};
@@ -136,15 +148,20 @@ private:
 	wxGridSizer * animationSpritesSizer = nullptr;
 	wxGenericStaticBitmap * animationSpriteBitmaps[64];
 	wxStaticText * currentFrameNumber = nullptr;
-	wxTextCtrl * animationWidthInput = nullptr, * animationHeightInput = nullptr;
-	wxTextCtrl * amountOfFramesInput = nullptr;
-	wxCheckBox * alwaysAnimatedCheckbox = nullptr;
+	wxSpinCtrl * animationWidthInput = nullptr, * animationHeightInput = nullptr;
+	wxSpinCtrl * patternWidthInput = nullptr, * patternHeightInput = nullptr;
+	wxStaticText * currentXDivLabel = nullptr, * currentYDivLabel = nullptr;
+	wxSpinCtrl * layersCountInput = nullptr;
+	wxStaticText * currentLayerNumber = nullptr;
+	wxSpinCtrl * amountOfFramesInput = nullptr;
+	wxCheckBox * alwaysAnimatedCheckbox = nullptr, * blendLayersCheckbox = nullptr;
 	wxStaticText * groundSpeedLabel = nullptr, * lightColorLabel = nullptr, * lightIntensityLabel = nullptr;
 	wxStaticText * offsetXLabel = nullptr, * offsetYLabel = nullptr, * elevationLabel = nullptr;
 	wxTextCtrl * groundSpeedInput = nullptr, * lightIntensityInput = nullptr;
 	wxTextCtrl * offsetXInput = nullptr, * offsetYInput = nullptr, * elevationInput = nullptr;
 	wxColourPickerCtrl * lightColorPicker = nullptr;
-	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0;
+	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0, currentLayer = 0;
+	bool doBlendLayers = false;
 	shared_ptr <wxImage> stubImage = nullptr;
 	unique_ptr <unsigned char[]> stubImageRgb = nullptr;
 	unique_ptr <unsigned char[]> stubImageAlpha = nullptr;
@@ -160,16 +177,27 @@ private:
 	void OnObjectCategoryChanged(wxCommandEvent & event);
 	void OnObjectSelected(wxCommandEvent & event);
 	void OnToggleAttrCheckbox(wxCommandEvent & event);
-	void OnAnimWidthChanged(wxCommandEvent & event);
-	void OnAnimHeightChanged(wxCommandEvent & event);
-	void OnFramesAmountChanged(wxCommandEvent & event);
+	void OnAnimWidthChanged(wxSpinEvent & event);
+	void OnAnimHeightChanged(wxSpinEvent & event);
+	void OnFramesAmountChanged(wxSpinEvent & event);
 	void OnClickOrientationButton(wxCommandEvent & event);
+	void OnPatternWidthChanged(wxSpinEvent & event);
+	void OnPatternHeightChanged(wxSpinEvent & event);
+	void OnClickPrevXDivButton(wxCommandEvent & event);
+	void OnClickNextXDivButton(wxCommandEvent & event);
+	void OnClickPrevYDivButton(wxCommandEvent & event);
+	void OnClickNextYDivButton(wxCommandEvent & event);
+	void OnLayersCountChanged(wxSpinEvent & event);
+	void OnClickPrevLayerButton(wxCommandEvent & event);
+	void OnClickNextLayerButton(wxCommandEvent & event);
 	void OnClickPrevFrameButton(wxCommandEvent & event);
 	void OnClickNextFrameButton(wxCommandEvent & event);
 	void OnClickNewObjectButton(wxCommandEvent & event);
+	void OnClickDeleteObjectButton(wxCommandEvent & event);
 	void OnClickImportSpriteButton(wxCommandEvent & event);
 	void OnClickImportedOrObjectSprite(wxMouseEvent & event);
 	void OnToggleAlwaysAnimatedAttr(wxCommandEvent & event);
+	void OnToggleBlendLayersCheckbox(wxCommandEvent & event);
 	void OnToggleIsFullGroundAttr(wxCommandEvent & event);
 	void OnToggleHasLightAttr(wxCommandEvent & event);
 	void OnToggleHasOffsetAttr(wxCommandEvent & event);
@@ -188,15 +216,16 @@ private:
 	void OnQuickGuide(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
 	bool checkDirty();
-	void fillObjectsListBox();
+	void fillObjectsListBox(unsigned int selectedIndex = 0);
 	void setAttributeValues(bool isNewObject = false);
 	void fillObjectSprites();
-	void fillAnimationSection();
+	void fillAnimationSection(bool resetIterators = true);
 	void fillAnimationSprites();
 	void buildAnimationSpriteHolders();
 	void drawAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
 	void clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
 	void resizeObjectSpriteIDsArray(shared_ptr <DatObject> object);
+	void deleteSelectedObject();
 
 	wxDECLARE_EVENT_TABLE();
 

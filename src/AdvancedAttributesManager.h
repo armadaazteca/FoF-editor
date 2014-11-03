@@ -15,17 +15,18 @@ class AdvancedAttributesManager
 {
 public:
 	static AdvancedAttributesManager & getInstance();
-	inline AdvancedAttributesMap & getAllAttributes() { return attributes; }
-	shared_ptr <AdvancedObjectAttributes> getAttributes(unsigned int objectID);
-	void setAttributes(unsigned int objectID, shared_ptr <AdvancedObjectAttributes> attrs);
-	void removeAttributes(unsigned int objectID);
+	AdvancedAttributesMap & getCategoryAttributes(DatObjectCategory category);
+	shared_ptr <AdvancedObjectAttributes> getAttributes(DatObjectCategory category, unsigned int objectID);
+	void setAttributes(DatObjectCategory category, unsigned int objectID, shared_ptr <AdvancedObjectAttributes> attrs);
+	void removeAttributes(DatObjectCategory category, unsigned int objectID);
 	bool read(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool save(const wxString & filename, ProgressUpdatable * progressUpdatable);
 
 private:
 	AdvancedAttributesManager() {}
 
-	AdvancedAttributesMap attributes;
+	map <DatObjectCategory, AdvancedAttributesMap> allAttributes;
+	fstream file;
 };
 
 #endif // _ADVANCED_ATTRIBUTES_MANAGER_H_

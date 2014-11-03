@@ -15,6 +15,7 @@
 #include "MainWindow.h"
 #include "DatSprOpenSaveDialog.h"
 #include "AdvancedAttributesDialog.h"
+#include "AdvancedAttributesManager.h"
 #include "GenerateRMEDialog.h"
 #include "QuickGuideDialog.h"
 #include "AboutDialog.h"
@@ -42,9 +43,10 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_COMMAND(wxID_ANY, ADV_ATTRS_CHANGED, MainWindow::OnAdvancedAttributesChanged)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
-	EVT_TEXT(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
-	EVT_TEXT(ID_ANIM_HEIGHT_INPUT, MainWindow::OnAnimHeightChanged)
-	EVT_TEXT(ID_FRAMES_AMOUNT_INPUT, MainWindow::OnFramesAmountChanged)
+	EVT_SPINCTRL(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
+	EVT_SPINCTRL(ID_ANIM_HEIGHT_INPUT, MainWindow::OnAnimHeightChanged)
+	EVT_SPINCTRL(ID_LAYERS_COUNT_INPUT, MainWindow::OnLayersCountChanged)
+	EVT_SPINCTRL(ID_FRAMES_AMOUNT_INPUT, MainWindow::OnFramesAmountChanged)
 	EVT_BUTTON(ID_DIR_TOP_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_TOP_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_TOP_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
@@ -53,11 +55,21 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_BUTTON(ID_DIR_BOTTOM_LEFT_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_BOTTOM_BUTTON, MainWindow::OnClickOrientationButton)
 	EVT_BUTTON(ID_DIR_BOTTOM_RIGHT_BUTTON, MainWindow::OnClickOrientationButton)
+	EVT_SPINCTRL(ID_PATTERN_WIDTH_INPUT, MainWindow::OnPatternWidthChanged)
+	EVT_SPINCTRL(ID_PATTERN_HEIGHT_INPUT, MainWindow::OnPatternHeightChanged)
+	EVT_BUTTON(ID_PREV_XDIV_BUTTON, MainWindow::OnClickPrevXDivButton)
+	EVT_BUTTON(ID_NEXT_XDIV_BUTTON, MainWindow::OnClickNextXDivButton)
+	EVT_BUTTON(ID_PREV_YDIV_BUTTON, MainWindow::OnClickPrevYDivButton)
+	EVT_BUTTON(ID_NEXT_YDIV_BUTTON, MainWindow::OnClickNextYDivButton)
+	EVT_BUTTON(ID_PREV_LAYER_BUTTON, MainWindow::OnClickPrevLayerButton)
+	EVT_BUTTON(ID_NEXT_LAYER_BUTTON, MainWindow::OnClickNextLayerButton)
 	EVT_BUTTON(ID_PREV_FRAME_BUTTON, MainWindow::OnClickPrevFrameButton)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
+	EVT_BUTTON(ID_DELETE_OBJECT_BUTTON, MainWindow::OnClickDeleteObjectButton)
 	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
 	EVT_CHECKBOX(ID_ALWAYS_ANIMATED_CHECKBOX, MainWindow::OnToggleAlwaysAnimatedAttr)
+	EVT_CHECKBOX(ID_BLEND_LAYERS_CHECKBOX, MainWindow::OnToggleBlendLayersCheckbox)
 	EVT_CHECKBOX(ID_ATTR_IS_FULL_GROUND, MainWindow::OnToggleIsFullGroundAttr)
 	EVT_CHECKBOX(ID_ATTR_HAS_LIGHT, MainWindow::OnToggleHasLightAttr)
 	EVT_CHECKBOX(ID_ATTR_HAS_OFFSET, MainWindow::OnToggleHasOffsetAttr)
@@ -86,8 +98,8 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
 	menuTools = new wxMenu();
-	menuTools->Append(ID_MENU_EDIT_ADVANCED_ATTRS, "Edit advanced attributes...");
-	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources...");
+	menuTools->Append(ID_MENU_EDIT_ADVANCED_ATTRS, "Edit advanced attributes...\tCtrl-E");
+	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources...\tCtrl-G");
 	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable(false);
 	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable(false);
 	menuHelp = new wxMenu();
@@ -104,15 +116,23 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto vbox = new wxBoxSizer(wxVERTICAL);
 	auto fgs = new wxFlexGridSizer(1, 3, 10, 10);
 
-	auto leftColumnGrid = new wxFlexGridSizer(3, 1, 5, 5);
+	auto leftColumnGrid = new wxFlexGridSizer(4, 1, 5, 5);
 	categoryComboBox = new wxComboBox(mainPanel, ID_CATEGORIES_COMBOBOX, CATEGORIES[0],
 			wxDefaultPosition, wxDefaultSize, 4, CATEGORIES, wxCB_READONLY);
 	leftColumnGrid->Add(categoryComboBox, 1, wxEXPAND);
 	objectsListBox = new wxListBox(mainPanel, ID_OBJECTS_LISTBOX, wxDefaultPosition, wxSize(220, -1), 0, NULL, wxLB_SINGLE);
+	auto onKeyDown = [&](wxKeyEvent & event)
+	{
+		if (event.GetKeyCode() == WXK_DELETE) deleteSelectedObject();
+		else event.Skip();
+	};
+	objectsListBox->Bind(wxEVT_KEY_DOWN, onKeyDown);
 	leftColumnGrid->Add(objectsListBox, 1, wxEXPAND);
 	leftColumnGrid->AddGrowableRow(1, 1);
 	auto newObjectButton = new wxButton(mainPanel, ID_NEW_OBJECT_BUTTON, "New object");
 	leftColumnGrid->Add(newObjectButton, 1, wxEXPAND);
+	auto deleteObjectButton = new wxButton(mainPanel, ID_DELETE_OBJECT_BUTTON, "Delete object");
+	leftColumnGrid->Add(deleteObjectButton, 1, wxEXPAND);
 
 	auto onMouseWheel = [&](wxMouseEvent & event)
 	{
@@ -195,50 +215,145 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	}
 	stubImage = make_shared <wxImage> (32, 32, stubImageRgb.get(), stubImageAlpha.get(), true);
 
-	// frame control
-	auto frameNumberSizer = new wxBoxSizer(wxHORIZONTAL);
-	auto currentFrameText = new wxStaticText(animationPanel, -1, "Current frame:");
-	frameNumberSizer->Add(currentFrameText, 0, wxALL, 10);
-	currentFrame = 0;
-	currentFrameNumber = new wxStaticText(animationPanel, -1, STR_ZERO);
-	frameNumberSizer->Add(currentFrameNumber, 0, wxTOP | wxBOTTOM, 10);
-	animationPanelSizer->Add(frameNumberSizer, 0, wxALIGN_CENTER);
-
-	auto frameButtonsSizer = new wxBoxSizer(wxHORIZONTAL);
-	auto prevFrameButton = new wxButton(animationPanel, ID_PREV_FRAME_BUTTON, "< previous");
-	frameButtonsSizer->Add(prevFrameButton, 0, wxTOP | wxRIGHT, 5);
-	auto nextFrameButton = new wxButton(animationPanel, ID_NEXT_FRAME_BUTTON, "next >");
-	frameButtonsSizer->Add(nextFrameButton, 0, wxTOP | wxLEFT, 5);
-	animationPanelSizer->Add(frameButtonsSizer, 0, wxALIGN_CENTER);
+	// animation settings
+	auto animationSettingsGridSizer = new wxGridSizer(2, 5, 5);
 
 	// width and height settings
 	animationPanelSizer->Add(0, 5); // a little spacer
-	auto widthAndHeightSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto widthSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto widthLabel = new wxStaticText(animationPanel, -1, "Width:");
-	widthAndHeightSizer->Add(widthLabel, 0, wxALIGN_CENTER_VERTICAL);
-	animationWidthInput = new wxTextCtrl(animationPanel, ID_ANIM_WIDTH_INPUT, "1", wxDefaultPosition,
-	                                     wxSize(25, -1), wxTE_RIGHT);
-	widthAndHeightSizer->Add(animationWidthInput, 0, wxALL, 5);
+	widthSizer->Add(widthLabel, 0, wxALIGN_CENTER_VERTICAL);
+	animationWidthInput = new wxSpinCtrl(animationPanel, ID_ANIM_WIDTH_INPUT, "1", wxDefaultPosition,
+	                                     wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	animationWidthInput->SetRange(1, Config::MAX_OBJECT_WIDTH);
+	widthSizer->Add(animationWidthInput, 0, wxLEFT | wxRIGHT, 5);
+	animationSettingsGridSizer->Add(widthSizer, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+
+	auto heightSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto heightLabel = new wxStaticText(animationPanel, -1, "Height:");
-	widthAndHeightSizer->Add(heightLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 10);
-	animationHeightInput = new wxTextCtrl(animationPanel, ID_ANIM_HEIGHT_INPUT, "1", wxDefaultPosition,
-	                                      wxSize(25, -1), wxTE_RIGHT);
-	widthAndHeightSizer->Add(animationHeightInput, 0, wxALL, 5);
-	animationPanelSizer->Add(widthAndHeightSizer, 0, wxALIGN_CENTER);
+	heightSizer->Add(heightLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	animationHeightInput = new wxSpinCtrl(animationPanel, ID_ANIM_HEIGHT_INPUT, "1", wxDefaultPosition,
+	                                      wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	animationHeightInput->SetRange(1, Config::MAX_OBJECT_HEIGHT);
+	heightSizer->Add(animationHeightInput, 0, wxLEFT, 5);
+	animationSettingsGridSizer->Add(heightSizer, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+
+	// pattern width / height and xDiv / yDiv controls
+	auto patternWidthBox = new wxBoxSizer(wxHORIZONTAL);
+	auto patternWidthLabel = new wxStaticText(animationPanel, wxID_ANY, "Pattern width:");
+	patternWidthBox->Add(patternWidthLabel, 0, wxALIGN_CENTER_VERTICAL, 5);
+	patternWidthInput = new wxSpinCtrl(animationPanel, ID_PATTERN_WIDTH_INPUT, "1", wxDefaultPosition,
+                                     wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	patternWidthInput->SetRange(1, Config::MAX_XY_DIV);
+	patternWidthBox->Add(patternWidthInput, 0, wxLEFT | wxRIGHT, 5);
+	animationSettingsGridSizer->Add(patternWidthBox, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+
+	wxFont monospaceFont = wxSystemSettings::GetFont(wxSYS_SYSTEM_FONT);
+	monospaceFont.SetFamily(wxFONTFAMILY_TELETYPE);
+
+	auto xDivBox = new wxBoxSizer(wxHORIZONTAL);
+	auto prevXDivButton = new wxButton(animationPanel, ID_PREV_XDIV_BUTTON, "<", wxDefaultPosition,
+	                                   wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	xDivBox->Add(prevXDivButton, 0, wxLEFT, 5);
+	auto xDivLabel = new wxStaticText(animationPanel, wxID_ANY, "xDiv:");
+	xDivLabel->SetFont(monospaceFont);
+	xDivBox->Add(xDivLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	currentXDivLabel = new wxStaticText(animationPanel, wxID_ANY, STR_ZERO);
+	currentXDivLabel->SetFont(monospaceFont);
+	xDivBox->Add(currentXDivLabel, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	auto nextXDivButton = new wxButton(animationPanel, ID_NEXT_XDIV_BUTTON, ">", wxDefaultPosition,
+	                                   wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	xDivBox->Add(nextXDivButton);
+	animationSettingsGridSizer->Add(xDivBox, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+
+	auto patternHeightBox = new wxBoxSizer(wxHORIZONTAL);
+	auto patternHeightLabel = new wxStaticText(animationPanel, wxID_ANY, "Pattern height:");
+	patternHeightBox->Add(patternHeightLabel, 0, wxALIGN_CENTER_VERTICAL);
+	patternHeightInput = new wxSpinCtrl(animationPanel, ID_PATTERN_HEIGHT_INPUT, "1", wxDefaultPosition,
+																		 wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	patternHeightInput->SetRange(1, Config::MAX_XY_DIV);
+	patternHeightBox->Add(patternHeightInput, 0, wxLEFT | wxRIGHT, 5);
+	animationSettingsGridSizer->Add(patternHeightBox, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+
+	auto yDivBox = new wxBoxSizer(wxHORIZONTAL);
+	auto prevYDivButton = new wxButton(animationPanel, ID_PREV_YDIV_BUTTON, "<", wxDefaultPosition,
+																		 wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	yDivBox->Add(prevYDivButton, 0, wxLEFT, 5);
+	auto yDivLabel = new wxStaticText(animationPanel, wxID_ANY, "yDiv:");
+	yDivLabel->SetFont(monospaceFont);
+	yDivBox->Add(yDivLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	currentYDivLabel = new wxStaticText(animationPanel, wxID_ANY, STR_ZERO);
+	currentYDivLabel->SetFont(monospaceFont);
+	yDivBox->Add(currentYDivLabel, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	auto nextYDivButton = new wxButton(animationPanel, ID_NEXT_YDIV_BUTTON, ">", wxDefaultPosition,
+																		 wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	yDivBox->Add(nextYDivButton);
+	animationSettingsGridSizer->Add(yDivBox, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+
+	// layer controls
+	auto layersCountSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto layersCountLabel = new wxStaticText(animationPanel, -1, "Layers count:");
+	layersCountSizer->Add(layersCountLabel, 0, wxALIGN_CENTER_VERTICAL);
+	layersCountInput = new wxSpinCtrl(animationPanel, ID_LAYERS_COUNT_INPUT, "1", wxDefaultPosition,
+	                                  wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	layersCountInput->SetRange(1, Config::MAX_LAYERS);
+	layersCountSizer->Add(layersCountInput, 0, wxLEFT | wxRIGHT, 5);
+	animationSettingsGridSizer->Add(layersCountSizer, 0, wxALIGN_RIGHT);
+
+	currentLayer = 0;
+	auto layerControlsSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto prevLayerButton = new wxButton(animationPanel, ID_PREV_LAYER_BUTTON, "<", wxDefaultPosition,
+																			wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	layerControlsSizer->Add(prevLayerButton, 0, wxLEFT, 5);
+	auto currentLayerLabel = new wxStaticText(animationPanel, -1, "lr #:");
+	currentLayerLabel->SetFont(monospaceFont);
+	layerControlsSizer->Add(currentLayerLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	currentLayerNumber = new wxStaticText(animationPanel, -1, STR_ZERO);
+	currentLayerNumber->SetFont(monospaceFont);
+	layerControlsSizer->Add(currentLayerNumber, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	auto nextLayerButton = new wxButton(animationPanel, ID_NEXT_LAYER_BUTTON, ">", wxDefaultPosition,
+																			wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	layerControlsSizer->Add(nextLayerButton);
+	animationSettingsGridSizer->Add(layerControlsSizer, 0, wxALIGN_LEFT);
 
 	// amount of frames setting
 	auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto amountOfFramesLabel = new wxStaticText(animationPanel, -1, "Amount of frames:");
 	amountOfFramesSizer->Add(amountOfFramesLabel, 0, wxALIGN_CENTER_VERTICAL);
-	amountOfFramesInput = new wxTextCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition,
-	                                     wxSize(25, -1), wxTE_RIGHT);
-	amountOfFramesSizer->Add(amountOfFramesInput, 0, wxALL, 5);
-	animationPanelSizer->Add(amountOfFramesSizer, 0, wxALIGN_CENTER);
+	amountOfFramesInput = new wxSpinCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition,
+																			 wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	amountOfFramesInput->SetRange(1, Config::MAX_ANIM_FRAMES);
+	amountOfFramesSizer->Add(amountOfFramesInput, 0, wxLEFT | wxRIGHT, 5);
+	animationSettingsGridSizer->Add(amountOfFramesSizer, 0, wxALIGN_RIGHT);
+
+	// frame controls
+	currentFrame = 0;
+	auto frameControlsSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto prevFrameButton = new wxButton(animationPanel, ID_PREV_FRAME_BUTTON, "<", wxDefaultPosition,
+	                                    wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	frameControlsSizer->Add(prevFrameButton, 0, wxLEFT, 5);
+	auto currentFrameLabel = new wxStaticText(animationPanel, -1, "fr #:");
+	currentFrameLabel->SetFont(monospaceFont);
+	frameControlsSizer->Add(currentFrameLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	currentFrameNumber = new wxStaticText(animationPanel, -1, STR_ZERO);
+	currentFrameNumber->SetFont(monospaceFont);
+	frameControlsSizer->Add(currentFrameNumber, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	auto nextFrameButton = new wxButton(animationPanel, ID_NEXT_FRAME_BUTTON, ">", wxDefaultPosition,
+	                                    wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
+	frameControlsSizer->Add(nextFrameButton);
+	animationSettingsGridSizer->Add(frameControlsSizer, 0, wxALIGN_LEFT);
 
 	// always animated setting
 	alwaysAnimatedCheckbox = new wxCheckBox(animationPanel, ID_ALWAYS_ANIMATED_CHECKBOX, "Always animated");
-	animationPanelSizer->Add(alwaysAnimatedCheckbox, 0, wxALL | wxALIGN_CENTER, 5);
+	animationSettingsGridSizer->Add(alwaysAnimatedCheckbox, 0, wxALIGN_CENTER);
 
+	// always animated setting
+	doBlendLayers = true;
+	blendLayersCheckbox = new wxCheckBox(animationPanel, ID_BLEND_LAYERS_CHECKBOX, "Blend layers");
+	blendLayersCheckbox->SetValue(doBlendLayers);
+	animationSettingsGridSizer->Add(blendLayersCheckbox, 0, wxALIGN_CENTER);
+
+	animationPanelSizer->Add(animationSettingsGridSizer, 0, wxALIGN_CENTER);
 	animationPanel->SetSizer(animationPanelSizer);
 	animationBoxExpandSizer->Add(animationPanel, 0, wxALIGN_CENTER);
 	animationBoxSizer->Add(animationBoxExpandSizer, 1, wxEXPAND);
@@ -564,7 +679,7 @@ bool MainWindow::checkDirty()
 	return true;
 }
 
-void MainWindow::fillObjectsListBox()
+void MainWindow::fillObjectsListBox(unsigned int selectedIndex)
 {
 	objectsListBox->Clear();
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
@@ -577,7 +692,7 @@ void MainWindow::fillObjectsListBox()
 	if (objectIds.size() > 0)
 	{
 		objectsListBox->InsertItems(objectIds, 0);
-		objectsListBox->SetSelection(0);
+		objectsListBox->SetSelection(selectedIndex);
 	}
 }
 
@@ -959,16 +1074,28 @@ void MainWindow::fillObjectSprites()
 	objectSpritesPanel->FitInside();
 }
 
-void MainWindow::fillAnimationSection()
+void MainWindow::fillAnimationSection(bool resetIterators)
 {
 	if (selectedObject)
 	{
-		animationWidthInput->ChangeValue(wxString::Format("%i", selectedObject->width));
-		animationHeightInput->ChangeValue(wxString::Format("%i", selectedObject->height));
+		if (resetIterators)
+		{
+			currentXDiv = currentYDiv = currentLayer = currentFrame = 0;
+		}
 
-		currentFrame = currentXDiv = currentYDiv = 0;
+		animationWidthInput->SetValue(selectedObject->width);
+		animationHeightInput->SetValue(selectedObject->height);
+
+		patternWidthInput->SetValue(selectedObject->patternWidth);
+		patternHeightInput->SetValue(selectedObject->patternHeight);
+		currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
+		currentYDivLabel->SetLabelText(wxString::Format("%i", currentYDiv));
+
+		layersCountInput->SetValue(selectedObject->layersCount);
+		currentLayerNumber->SetLabelText(wxString::Format("%i", currentLayer));
+
 		currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
-		amountOfFramesInput->ChangeValue(wxString::Format("%i", selectedObject->phasesCount));
+		amountOfFramesInput->SetValue(selectedObject->phasesCount);
 
 		alwaysAnimatedCheckbox->SetValue(selectedObject->isAlwaysAnimated);
 
@@ -976,12 +1103,23 @@ void MainWindow::fillAnimationSection()
 	}
 	else
 	{
-		animationWidthInput->ChangeValue(STR_ZERO);
-		animationHeightInput->ChangeValue(STR_ZERO);
+		if (resetIterators)
+		{
+			currentXDiv = currentYDiv = currentLayer = currentFrame = 0;
+		}
 
-		currentFrame = currentXDiv = currentYDiv = 0;
+		animationWidthInput->SetValue(0);
+		animationHeightInput->SetValue(0);
+
+		patternWidthInput->SetValue(0);
+		patternHeightInput->SetValue(0);
+		currentXDivLabel->SetLabelText(STR_ZERO);
+		currentYDivLabel->SetLabelText(STR_ZERO);
+
+		layersCountInput->SetValue(0);
+
 		currentFrameNumber->SetLabelText(STR_ZERO);
-		amountOfFramesInput->ChangeValue(STR_ZERO);
+		amountOfFramesInput->SetValue(0);
 
 		alwaysAnimatedCheckbox->SetValue(false);
 	}
@@ -1052,9 +1190,14 @@ void MainWindow::fillAnimationSprites()
 	unsigned int spriteId = 0;
 
 	int frameSize = selectedObject->width * selectedObject->height;
-	for (int layer = 0; layer < selectedObject->layersCount; ++layer)
+	int patternSize = selectedObject->patternWidth * selectedObject->patternHeight;
+	int startLayer = doBlendLayers ? 0 : currentLayer;
+	int endLayer = doBlendLayers ? selectedObject->layersCount : startLayer + 1;
+	for (int layer = startLayer; layer < endLayer; ++layer)
 	{
-		int startSprite = (currentXDiv + currentFrame * selectedObject->patternWidth + layer) * frameSize;
+		int xyDivIndex = currentYDiv * selectedObject->patternWidth + currentXDiv; // it's like 2d grid of sprites, it also can have layers
+		int frameIndex = currentFrame * patternSize * selectedObject->layersCount; // frames iterated over whole patterns + layers
+		int startSprite = (xyDivIndex + layer + frameIndex) * frameSize;
 		int endSprite = startSprite + frameSize;
 		for (int i = endSprite - 1, j = 0; i >= startSprite; --i, ++j)
 		{
@@ -1064,7 +1207,7 @@ void MainWindow::fillAnimationSprites()
 				sprite = sprites->at(spriteId);
 				if (sprite->valid)
 				{
-					if (layer == 0) // filling bottom layer
+					if (!doBlendLayers || layer == 0) // filling bottom layer (or single layer if not blending)
 					{
 						wxImage image(32, 32, sprite->rgb.get(), sprite->alpha.get(), true);
 						wxBitmap bitmap(image);
@@ -1081,7 +1224,7 @@ void MainWindow::fillAnimationSprites()
 				}
 				else
 				{
-					if (layer == 0) // filling bottom layer
+					if (!doBlendLayers || layer == 0) // filling bottom layer (or single layer if not blending)
 					{
 						wxBitmap emptyBitmap(*stubImage);
 						animationSpriteBitmaps[j]->SetBitmap(emptyBitmap);
@@ -1090,7 +1233,7 @@ void MainWindow::fillAnimationSprites()
 			}
 			else
 			{
-				if (layer == 0) // filling bottom layer
+				if (!doBlendLayers || layer == 0) // filling bottom layer (or single layer if not blending)
 				{
 					wxBitmap emptyBitmap(*stubImage);
 					animationSpriteBitmaps[j]->SetBitmap(emptyBitmap);
@@ -1100,15 +1243,10 @@ void MainWindow::fillAnimationSprites()
 	}
 }
 
-void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
+void MainWindow::OnAnimWidthChanged(wxSpinEvent & event)
 {
 	if (!animationWidthInput) return;
-	wxString strval = animationWidthInput->GetValue();
-	if (strval.Length() == 0) return;
-	unsigned int val = wxAtoi(strval);
-	if (val <= 1) val = 1;
-	else if (val > Config::MAX_OBJECT_WIDTH) val = Config::MAX_OBJECT_WIDTH;
-	animationWidthInput->ChangeValue(wxString::Format("%i", val));
+	unsigned int val = animationWidthInput->GetValue();
 	selectedObject->width = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
@@ -1119,15 +1257,10 @@ void MainWindow::OnAnimWidthChanged(wxCommandEvent & event)
 	statusBar->SetStatusText(wxString::Format("Object width changed to %i", val));
 }
 
-void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
+void MainWindow::OnAnimHeightChanged(wxSpinEvent & event)
 {
 	if (!animationHeightInput) return;
-	wxString strval = animationHeightInput->GetValue();
-	if (strval.Length() == 0) return;
-	unsigned int val = wxAtoi(strval);
-	if (val <= 1) val = 1;
-	else if (val > Config::MAX_OBJECT_HEIGHT) val = Config::MAX_OBJECT_HEIGHT;
-	animationHeightInput->ChangeValue(wxString::Format("%i", val));
+	unsigned int val = animationHeightInput->GetValue();
 	selectedObject->height = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
@@ -1138,15 +1271,10 @@ void MainWindow::OnAnimHeightChanged(wxCommandEvent & event)
 	statusBar->SetStatusText(wxString::Format("Object height changed to %i", val));
 }
 
-void MainWindow::OnFramesAmountChanged(wxCommandEvent & event)
+void MainWindow::OnFramesAmountChanged(wxSpinEvent & event)
 {
 	if (!amountOfFramesInput) return;
-	wxString strval = amountOfFramesInput->GetValue();
-	if (strval.Length() == 0) return;
-	unsigned int val = wxAtoi(strval);
-	if (val <= 1) val = 1;
-	else if (val > Config::MAX_ANIM_FRAMES) val = Config::MAX_ANIM_FRAMES;
-	amountOfFramesInput->ChangeValue(wxString::Format("%i", val));
+	unsigned int val = amountOfFramesInput->GetValue();
 	selectedObject->phasesCount = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
@@ -1211,15 +1339,113 @@ void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
 			selectOrientation(ORIENT_SOUTH_WEST, "south-west", 8);
 		break;
 	}
-	if (xDiv < selectedObject->patternWidth)
-	{
-		currentXDiv = xDiv;
-	}
+
+	currentXDiv = xDiv;
+	currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
 
 	// resetting frame when switching orientation
 	currentFrame = 0;
 	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
 
+	fillAnimationSprites();
+}
+
+void MainWindow::OnPatternWidthChanged(wxSpinEvent & event)
+{
+	unsigned int val = event.GetInt();
+	selectedObject->patternWidth = val;
+	resizeObjectSpriteIDsArray(selectedObject);
+	if (currentXDiv >= selectedObject->patternWidth)
+	{
+		currentXDiv = selectedObject->patternWidth - 1;
+		currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
+		fillAnimationSprites();
+	}
+
+	isDirty = true;
+
+	statusBar->SetStatusText(wxString::Format("Animation pattern width changed to %i", val));
+}
+
+void MainWindow::OnPatternHeightChanged(wxSpinEvent & event)
+{
+	unsigned int val = event.GetInt();
+	selectedObject->patternHeight = val;
+	resizeObjectSpriteIDsArray(selectedObject);
+	if (currentYDiv >= selectedObject->patternHeight)
+	{
+		currentYDiv = selectedObject->patternHeight - 1;
+		currentYDivLabel->SetLabelText(wxString::Format("%i", currentYDiv));
+		fillAnimationSprites();
+	}
+
+	isDirty = true;
+
+	statusBar->SetStatusText(wxString::Format("Animation pattern height changed to %i", val));
+}
+
+void MainWindow::OnClickPrevXDivButton(wxCommandEvent & event)
+{
+	if (currentXDiv == 0) currentXDiv = selectedObject->patternWidth - 1;
+	else currentXDiv--;
+	currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
+	fillAnimationSprites();
+}
+
+void MainWindow::OnClickNextXDivButton(wxCommandEvent & event)
+{
+	currentXDiv++;
+	if (currentXDiv >= selectedObject->patternWidth) currentXDiv = 0;
+	currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
+	fillAnimationSprites();
+}
+
+void MainWindow::OnClickPrevYDivButton(wxCommandEvent & event)
+{
+	if (currentYDiv == 0) currentYDiv = selectedObject->patternHeight - 1;
+	else currentYDiv--;
+	currentYDivLabel->SetLabelText(wxString::Format("%i", currentYDiv));
+	fillAnimationSprites();
+}
+
+void MainWindow::OnClickNextYDivButton(wxCommandEvent & event)
+{
+	currentYDiv++;
+	if (currentYDiv >= selectedObject->patternHeight) currentYDiv = 0;
+	currentYDivLabel->SetLabelText(wxString::Format("%i", currentYDiv));
+	fillAnimationSprites();
+}
+
+void MainWindow::OnLayersCountChanged(wxSpinEvent & event)
+{
+	unsigned int val = event.GetInt();
+	selectedObject->layersCount = val;
+	resizeObjectSpriteIDsArray(selectedObject);
+	if (currentLayer >= selectedObject->layersCount)
+	{
+		currentLayer = selectedObject->patternWidth - 1;
+		currentLayerNumber->SetLabelText(wxString::Format("%i", currentLayer));
+		fillAnimationSprites();
+	}
+
+	isDirty = true;
+
+	statusBar->SetStatusText(wxString::Format("Animation layers count changed to %i", val));
+}
+
+void MainWindow::OnClickPrevLayerButton(wxCommandEvent & event)
+{
+	if (currentLayer == 0) currentLayer = selectedObject->layersCount - 1;
+	else currentLayer--;
+	currentLayerNumber->SetLabelText(wxString::Format("%i", currentLayer));
+	fillAnimationSprites();
+}
+
+void MainWindow::OnClickNextLayerButton(wxCommandEvent & event)
+{
+	currentLayer++;
+	if (currentLayer >= selectedObject->layersCount) currentLayer = 0;
+	currentLayerNumber->SetLabelText(wxString::Format("%i", currentLayer));
 	fillAnimationSprites();
 }
 
@@ -1267,6 +1493,62 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 
 	statusBar->SetStatusText(wxString::Format("New object with ID <%i> has been created in the \"%s\" category",
 	                         newObject->id, CATEGORIES[currentCategory]));
+}
+
+void MainWindow::OnClickDeleteObjectButton(wxCommandEvent & event)
+{
+	deleteSelectedObject();
+}
+
+void MainWindow::deleteSelectedObject()
+{
+	const wxString & msg = wxString::Format("Are you sure you want to delete object <%i> from \"%s\"?",
+		                                        selectedObject->id, CATEGORIES[currentCategory]);
+	auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(currentCategory);
+	if (selectedObject && wxMessageBox(msg, "Confirm delete", wxYES_NO | wxCANCEL) == wxYES)
+	{
+		auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
+		unsigned int id = selectedObject->id, index = id - (currentCategory == CategoryItem ? 100 : 1);
+
+		// remapping advanced attributes first
+		unsigned int attrsID = id, endID = id + (objects->size() - index) - 1;
+		for (; attrsID < endID; ++attrsID)
+		{
+			attrs[attrsID] = attrs[attrsID + 1];
+		}
+		attrs.erase(attrs.find(attrsID));
+
+		// then erasing object itself
+		objects->erase(objects->begin() + index);
+		if (index < objects->size())
+		{
+			selectedObject = objects->at(index); // moving to next object
+			while (index < objects->size())
+			{
+				objects->at(index++)->id = id++; // reindexing IDs
+			}
+			index--;
+		}
+		else if (index > 0)
+		{
+			selectedObject = objects->at(--index); // moving to previous object
+		}
+		else
+		{
+			selectedObject = nullptr;
+			animationPanel->Disable();
+			booleanAttrsPanel->Disable();
+			valueAttrsPanel->Disable();
+		}
+
+		fillObjectsListBox(index);
+		setAttributeValues();
+		fillObjectSprites();
+		buildAnimationSpriteHolders();
+		fillAnimationSection();
+
+		isDirty = true;
+	}
 }
 
 void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
@@ -1363,7 +1645,7 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 			}
 			else
 			{
-				statusBar->SetStatusText(wxString::Format("%i new sprites have been imported", paths.size()));
+				statusBar->SetStatusText(wxString::Format("%li new sprites have been imported", paths.size()));
 			}
 		}
 	}
@@ -1390,6 +1672,13 @@ void MainWindow::OnToggleAlwaysAnimatedAttr(wxCommandEvent & event)
 	isDirty = true;
 
 	statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Always animated", value ? "on" : "off"));
+}
+
+void MainWindow::OnToggleBlendLayersCheckbox(wxCommandEvent & event)
+{
+	doBlendLayers = event.GetInt() != 0;
+	fillAnimationSection(false);
+	statusBar->SetStatusText(wxString::Format("Layers blending is %s", doBlendLayers ? "on" : "off"));
 }
 
 void MainWindow::OnToggleIsFullGroundAttr(wxCommandEvent & event)
@@ -1549,11 +1838,12 @@ void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
 	object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
                       * object->patternHeight * object->patternDepth * object->phasesCount;
 	object->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[object->spriteCount]);
-	for (unsigned int i = 0; i < oldSpriteCount; ++i)
+	unsigned int minSpriteCount = min(object->spriteCount, oldSpriteCount);
+	for (unsigned int i = 0; i < minSpriteCount; ++i)
 	{
 		object->spriteIDs[i] = oldSpriteIDs[i];
 	}
-	for (unsigned int i = oldSpriteCount; i < object->spriteCount; ++i)
+	for (unsigned int i = minSpriteCount; i < object->spriteCount; ++i)
 	{
 		object->spriteIDs[i] = 0;
 	}
@@ -1643,8 +1933,13 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 	auto esi = mainWindow->editorSpriteIDs[esiIndexInVector];
 	auto obj = mainWindow->selectedObject;
 	unsigned int frameSize = obj->width * obj->height;
-	unsigned int spriteIdStartIndex = (mainWindow->currentXDiv + mainWindow->currentFrame
-	                                * obj->patternWidth) * frameSize + (frameSize - 1 - spriteHolderIndex);
+	unsigned int patternSize = obj->patternWidth * obj->patternHeight;
+	int xyDivIndex = mainWindow->currentYDiv * obj->patternWidth + mainWindow->currentXDiv;
+	// ^ it's like 2d grid of sprites, it also can have layers
+	int frameIndex = mainWindow->currentFrame * patternSize * obj->layersCount;
+	// ^ frames iterated over whole patterns + layers
+	unsigned int spriteIdStartIndex = (xyDivIndex + mainWindow->currentLayer + frameIndex) * frameSize
+	                                + (frameSize - 1 - spriteHolderIndex);
 
 	if (esi->getType() == EditorSpriteIDs::IMPORTED) // imported sprite
 	{

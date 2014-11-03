@@ -27,7 +27,7 @@ AdvancedAttributesDialog::AdvancedAttributesDialog(wxWindow * parent, DatObjectC
 
 	auto objects = DatSprReaderWriter::getInstance().getObjects(objCat);
 	auto object = objects->at(objID - (objCat == CategoryItem ? 100 : 1));
-	auto attributes = AdvancedAttributesManager::getInstance().getAttributes(objID);
+	auto attributes = AdvancedAttributesManager::getInstance().getAttributes(objectCategory, objID);
 
 	int currentRow = 0;
 	if (objectCategory == CategoryItem)
@@ -163,7 +163,7 @@ void AdvancedAttributesDialog::OnClickSaveButton(wxCommandEvent & event)
 		if (typeNPCRb->GetValue()) attributes->creatureType = CREATURE_NPC;
 	}
 
-	AdvancedAttributesManager::getInstance().setAttributes(objID, attributes);
+	AdvancedAttributesManager::getInstance().setAttributes(objCat, objID, attributes);
 
 	Close();
 
@@ -177,7 +177,7 @@ void AdvancedAttributesDialog::OnClickEraseButton(wxCommandEvent & event)
 	const wchar_t * confirmation = wxT("This action will completely erase advanced attributes record, so it won't be saved into .aoa file");
 	if (wxMessageBox(confirmation, "Confirm erase", wxOK | wxCANCEL) == wxOK)
 	{
-		AdvancedAttributesManager::getInstance().removeAttributes(objID);
+		AdvancedAttributesManager::getInstance().removeAttributes(objCat, objID);
 
 		Close();
 

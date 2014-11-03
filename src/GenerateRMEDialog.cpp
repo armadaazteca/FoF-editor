@@ -4,9 +4,11 @@
 #endif
 #include <wx/filename.h>
 #include "Events.h"
+#include "Config.h"
 #include "Settings.h"
 #include "DatSprReaderWriter.h"
 #include "ItemsOtbWriter.h"
+#include "XmlWriter.h"
 #include "GenerateRMEDialog.h"
 
 wxBEGIN_EVENT_TABLE(GenerateRMEDialog, wxDialog)
@@ -94,6 +96,7 @@ void GenerateRMEDialog::OnClickGenerateButton(wxCommandEvent & event)
 	}
 
 	auto items = DatSprReaderWriter::getInstance().getObjects(CategoryItem);
+	auto creatures = DatSprReaderWriter::getInstance().getObjects(CategoryCreature);
 	if (items->size() == 0)
 	{
 		wxMessageDialog error(this, "Items list is empty, nothing to write.", "Error", wxOK | wxICON_ERROR);
@@ -101,8 +104,6 @@ void GenerateRMEDialog::OnClickGenerateButton(wxCommandEvent & event)
 		return;
 	}
 
-
-	currentWriting = WRITING_ITEMS_OTB;
 	filename.AppendDir(filename.GetFullName());
 	filename.SetName("items");
 	filename.SetExt("otb");
@@ -112,33 +113,56 @@ void GenerateRMEDialog::OnClickGenerateButton(wxCommandEvent & event)
 		return;
 	}
 
+	progressStages = 3;
+	currentProgressStage = 0;
+	percentsPerStage = 100 / (float) progressStages;
+
 	if (ItemsOtbWriter::getInstance().writeItemsOtb(items, filename.GetFullPath(), this))
 	{
-		// notifying main window that files have been saved
-		wxCommandEvent event(RME_RES_GENERATED, 1);
-		wxPostEvent(m_parent, event);
-		Close();
+		currentProgressStage++;
+		auto & xmlWriter = XmlWriter::getInstance();
+		filename.SetExt("xml");
+		if (xmlWriter.writeItemsXML(items, filename.GetFullPath(), this))
+		{
+			currentProgressStage++;
+			filename.SetName("creatures");
+			if (!creatures || creatures->size() == 0 || xmlWriter.writeCreaturesXML(creatures, filename.GetFullPath(), this))
+			{
+				filename.SetName("materials");
+				if (xmlWriter.writeMaterialsXML(filename.GetFullPath()))
+				{
+					// notifying main window that files have been saved
+					wxCommandEvent event(RME_RES_GENERATED, 1);
+					wxPostEvent(m_parent, event);
+					Close();
+				}
+				else
+				{
+					wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, "materials.xml"), Config::ERROR_TITLE,
+					             wxOK | wxICON_ERROR);
+				}
+			}
+			else
+			{
+				wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, "creatures.xml"), Config::ERROR_TITLE,
+				             wxOK | wxICON_ERROR);
+			}
+		}
+		else
+		{
+			wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, "items.xml"), Config::ERROR_TITLE,
+			             wxOK | wxICON_ERROR);
+		}
 	}
 	else
 	{
-		wxMessageBox("The items.otb file cannot be written", "Error", wxOK | wxICON_ERROR);
+		wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, "items.otb"), Config::ERROR_TITLE,
+		             wxOK | wxICON_ERROR);
 	}
 }
 
 void GenerateRMEDialog::updateProgress(double value)
 {
-	float percentageFactor = 33.333;
-	if (currentWriting == WRITING_ITEMS_OTB)
-	{
-		progress->SetValue(ceil(value * percentageFactor));
-	}
-	else if (currentWriting == WRITING_ITEMS_XML)
-	{
-		progress->SetValue(ceil(percentageFactor + value * percentageFactor));
-	}
-	else if (currentWriting == WRITING_CREATURES_XML)
-	{
-		progress->SetValue(ceil(percentageFactor * 2 + value * percentageFactor));
-	}
+	progress->SetValue(ceil(percentsPerStage * currentProgressStage + percentsPerStage * value));
 	wxTheApp->Yield();
 }

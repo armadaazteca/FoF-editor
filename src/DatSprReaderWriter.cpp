@@ -222,6 +222,9 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 				progressUpdatable->updateProgress(++readings / (double) totalCount);
 			}
 		}
+
+		progressUpdatable->updateProgress(1);
+
 		file.close();
 	}
 	else
@@ -315,6 +318,8 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 			progressUpdatable->updateProgress(++readings / (double) spritesCount);
 		}
 
+		progressUpdatable->updateProgress(1);
+
 		file.close();
 	}
 	else
@@ -348,6 +353,8 @@ bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable 
 
 			progressUpdatable->updateProgress(++readings / (double) spritesCount);
 		}
+
+		progressUpdatable->updateProgress(1);
 
 		file.close();
 	}
@@ -474,6 +481,8 @@ bool DatSprReaderWriter::writeDat(const wxString & filename, ProgressUpdatable *
 			}
 		}
 
+		progressUpdatable->updateProgress(1);
+
 		file.close();
 	}
 	return true;
@@ -567,6 +576,8 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 
 			progressUpdatable->updateProgress(++writings / (double) spritesCount);
 		}
+
+		progressUpdatable->updateProgress(1);
 
 		file.close();
 	}

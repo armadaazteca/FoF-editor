@@ -4,8 +4,9 @@
 #endif
 #include <wx/filename.h>
 #include <wx/gbsizer.h>
-#include "Settings.h"
+#include "Config.h"
 #include "Events.h"
+#include "Settings.h"
 #include "DatSprReaderWriter.h"
 #include "AdvancedAttributesManager.h"
 #include "DatSprOpenSaveDialog.h"
@@ -72,7 +73,7 @@ DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
 	aoaPath = new wxTextCtrl(panel, -1, aoaPathStr);
 	aoaButton = new wxButton(panel, ID_BROWSE_AOA_BUTTON, browse);
 	aoaLabel->Enable(attsCheckboxValue);
-	aoaLabel->Enable(attsCheckboxValue);
+	aoaPath->Enable(attsCheckboxValue);
 	aoaButton->Enable(attsCheckboxValue);
 
 	progress = new wxGauge(panel, -1, 100);
@@ -180,7 +181,7 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 	const wxString & datPathStr = datPath->GetValue();
 	const wxString & sprPathStr = sprPath->GetValue();
 	const wxString & alpPathStr = alpPath->GetValue();
-	const wxString & aoaPathStr = alpPath->GetValue();
+	const wxString & aoaPathStr = aoaPath->GetValue();
 	bool readOrSaveAlpha = readOrSaveAlphaCheckbox->GetValue();
 	bool readOrSaveAttrs = readOrSaveAttrsCheckbox->GetValue();
 	Settings & settings = Settings::getInstance();
@@ -242,7 +243,8 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					currentProgressStage++;
 					if (!DatSprReaderWriter::getInstance().readAlpha(alpPathStr, this))
 					{
-						wxMessageBox("The .alp file cannot be read", "Error", wxOK | wxICON_ERROR);
+						wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".alp"), Config::ERROR_TITLE,
+						             wxOK | wxICON_ERROR);
 					}
 				}
 
@@ -251,7 +253,8 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					currentProgressStage++;
 					if (!AdvancedAttributesManager::getInstance().read(aoaPathStr, this))
 					{
-						wxMessageBox("The .aoa file cannot be read", "Error", wxOK | wxICON_ERROR);
+						wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".aoa"), Config::ERROR_TITLE,
+						             wxOK | wxICON_ERROR);
 					}
 				}
 
@@ -259,12 +262,14 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			}
 			else
 			{
-				wxMessageBox("The .spr file cannot be read", "Error", wxOK | wxICON_ERROR);
+				wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".spr"), Config::ERROR_TITLE,
+				             wxOK | wxICON_ERROR);
 			}
 		}
 		else
 		{
-			wxMessageBox("The .dat file cannot be read", "Error", wxOK | wxICON_ERROR);
+			wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".dat"), Config::ERROR_TITLE,
+			             wxOK | wxICON_ERROR);
 		}
 	}
 	else if (mode == MODE_SAVE)
@@ -292,7 +297,8 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					currentProgressStage++;
 					if (!DatSprReaderWriter::getInstance().writeAlpha(alpPathStr, this))
 					{
-						wxMessageBox("The .alp file cannot be written", "Error", wxOK | wxICON_ERROR);
+						wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".alp"), Config::ERROR_TITLE,
+						             wxOK | wxICON_ERROR);
 					}
 				}
 
@@ -301,7 +307,8 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					currentProgressStage++;
 					if (!AdvancedAttributesManager::getInstance().save(aoaPathStr, this))
 					{
-						wxMessageBox("The .aoa file cannot be written", "Error", wxOK | wxICON_ERROR);
+						wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".aoa"), Config::ERROR_TITLE,
+						             wxOK | wxICON_ERROR);
 					}
 				}
 
@@ -309,12 +316,14 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			}
 			else
 			{
-				wxMessageBox("The .spr file cannot be written", "Error", wxOK | wxICON_ERROR);
+				wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".spr"), Config::ERROR_TITLE,
+				             wxOK | wxICON_ERROR);
 			}
 		}
 		else
 		{
-			wxMessageBox("The .dat file cannot be written", "Error", wxOK | wxICON_ERROR);
+			wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".dat"), Config::ERROR_TITLE,
+			             wxOK | wxICON_ERROR);
 		}
 	}
 }
