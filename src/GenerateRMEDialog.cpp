@@ -21,12 +21,10 @@ GenerateRMEDialog::GenerateRMEDialog(wxWindow * parent) : wxDialog(parent, -1, "
 	auto vbox = new wxBoxSizer(wxVERTICAL), vboxwrap = new wxBoxSizer(wxVERTICAL);
 	Settings & settings = Settings::getInstance();
 
-	const wchar_t * toolDesc = wxT(
-		"This tool will generate specific resources for Remere's Map Editor, such as:\n"
-		"items.otb, items.xml, creatures.xml, materials.xml.\n"
-		"Generation is based on data from .dat-file and on advanced object attributes, stored in .aoa-file. "
-		"Generation is based on v9.60 formats, so path to files should be like \"<RME_dir>/data/960\"."
-	);
+	const char * toolDesc = "This tool will generate specific resources for Remere's Map Editor, such as:\n"
+	                        "items.otb, items.xml, creatures.xml, materials.xml.\n"
+	                        "Generation is based on data from .dat-file and on advanced object attributes, stored in .aoa-file. "
+	                        "Generation is based on v9.60 formats, so path to files should be like \"<RME_dir>/data/960\".";
 	auto toolDescLabel = new wxStaticText(this, -1, toolDesc, wxDefaultPosition, wxSize(450, 105));
 	vbox->Add(toolDescLabel, 0, wxALL, 5);
 

@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <vector>
+#include <stack>
 #include <wx/generic/statbmpg.h>
 #include <wx/dnd.h>
 #include <wx/clrpicker.h>
@@ -25,6 +26,8 @@ public:
 		inline Type getType() { return type; }
 		inline void setType(Type type) { this->type = type; }
 		inline vector <unsigned int> & getSpriteIDs() { return spriteIDs; }
+		inline unsigned int getObjectSpriteIndex() { return objectSpriteIndex; }
+		inline void setObjectSpriteIndex(unsigned int index) { objectSpriteIndex = index; }
 		inline unsigned int getIndexInVector() { return indexInVector; }
 		inline void setIndexInVector(unsigned int index) { indexInVector = index; }
 		inline unsigned int getBigSpriteWidth() { return bigSpriteWidth; }
@@ -37,6 +40,7 @@ public:
 	private:
 		Type type = EXISTING;
 		vector <unsigned int> spriteIDs;
+		unsigned int objectSpriteIndex = 0;
 		unsigned int indexInVector = 0;
 		unsigned int bigSpriteWidth = 1, bigSpriteHeight = 1;
 	};
@@ -87,10 +91,15 @@ private:
 		ID_FRAMES_AMOUNT_INPUT,
 		ID_ALWAYS_ANIMATED_CHECKBOX,
 		ID_BLEND_LAYERS_CHECKBOX,
+		ID_PREVIEW_ANIMATION_BUTTON,
+		ID_PREVIEW_TIMER,
+		ID_PREVIEW_FPS_INPUT,
 		ID_NEW_OBJECT_BUTTON,
 		ID_DELETE_OBJECT_BUTTON,
 		ID_IMPORT_SPRITES_BUTTON,
-		ID_IMPORTED_SPRITE
+		ID_IMPORTED_SPRITE,
+		ID_OBJ_SPRITES_GSB,
+		ID_GRID_GSB
 	};
 
 	enum BooleanAttrCheckboxIds
@@ -109,9 +118,15 @@ private:
 
 	enum MenuIDs
 	{
+		// main menu IDs
 		ID_MENU_EDIT_ADVANCED_ATTRS = 300,
 		ID_MENU_GENERATE_RME,
-		ID_MENU_QUICK_GUIDE
+		ID_MENU_CLEANUP_SPRITES,
+		ID_MENU_QUICK_GUIDE,
+		// context menu IDs
+		ID_MENU_EXPORT_SPRITE,
+		ID_MENU_EXPORT_COMPOSED,
+		ID_MENU_DELETE_SPRITE
 	};
 
 	enum OrientationToXDiv
@@ -126,11 +141,25 @@ private:
 		ORIENT_SOUTH_WEST = 7
 	};
 
-	bool isDirty = false; // whether files have been modified
+	enum OperationID
+	{
+		ANIM_WIDTH_CHANGE, ANIM_HEIGHT_CHANGE, PATTERN_WIDTH_CHANGE, PATTERN_HEIGHT_CHANGE,
+		LAYERS_COUNT_CHANGE, AMOUNT_OF_FRAMES_CHANGE, ALWAYS_ANIMATED_TOGGLE, OPERATION_NONE
+	};
+
+	struct OperationInfo
+	{
+		OperationID operationID = OPERATION_NONE;
+		int oldIntValue = 0, newIntValue = 0;
+		wxString oldStrValue, newStrValue;
+		bool chained = false; // whether this operation chained with other undos to rollback several at once
+	};
+
+	bool isDirty = false; // whether editor data has been modified
 
 	shared_ptr <DatObject> selectedObject = nullptr;
 
-	wxMenu * menuFile, * menuTools, * menuHelp = nullptr;
+	wxMenu * menuFile = nullptr, * menuEdit = nullptr, * menuTools = nullptr, * menuHelp = nullptr;
 	wxPanel * mainPanel = nullptr;
 	wxStatusBar * statusBar = nullptr;
 	wxComboBox * categoryComboBox = nullptr;
@@ -146,7 +175,7 @@ private:
 	wxFlexGridSizer * animationBoxExpandSizer = nullptr, * animationMainGridSizer = nullptr;
 	wxBoxSizer * animationPanelSizer = nullptr;
 	wxGridSizer * animationSpritesSizer = nullptr;
-	wxGenericStaticBitmap * animationSpriteBitmaps[64];
+	wxGenericStaticBitmap * animationSpriteBitmaps[16];
 	wxStaticText * currentFrameNumber = nullptr;
 	wxSpinCtrl * animationWidthInput = nullptr, * animationHeightInput = nullptr;
 	wxSpinCtrl * patternWidthInput = nullptr, * patternHeightInput = nullptr;
@@ -155,20 +184,26 @@ private:
 	wxStaticText * currentLayerNumber = nullptr;
 	wxSpinCtrl * amountOfFramesInput = nullptr;
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr, * blendLayersCheckbox = nullptr;
+	wxSpinCtrl * previewFpsInput = nullptr;
+	unique_ptr <wxTimer> previewTimer = nullptr;
 	wxStaticText * groundSpeedLabel = nullptr, * lightColorLabel = nullptr, * lightIntensityLabel = nullptr;
 	wxStaticText * offsetXLabel = nullptr, * offsetYLabel = nullptr, * elevationLabel = nullptr;
 	wxTextCtrl * groundSpeedInput = nullptr, * lightIntensityInput = nullptr;
 	wxTextCtrl * offsetXInput = nullptr, * offsetYInput = nullptr, * elevationInput = nullptr;
 	wxColourPickerCtrl * lightColorPicker = nullptr;
-	unsigned int currentFrame = 0, currentXDiv = 0, currentYDiv = 0, currentLayer = 0;
+	wxGenericStaticBitmap * spriteContextMenuTarget = nullptr;
+	unsigned int currentFrame = 0, lastCurrentFrame = 0, currentXDiv = 0, currentYDiv = 0, currentLayer = 0;
 	bool doBlendLayers = false;
 	shared_ptr <wxImage> stubImage = nullptr;
 	unique_ptr <unsigned char[]> stubImageRgb = nullptr;
 	unique_ptr <unsigned char[]> stubImageAlpha = nullptr;
-	int animationWidth = 0, animationHeight = 0, amountOfFrames = 0;
+	int amountOfFrames = 0;
+	bool isPreviewAnimationOn = false;
 
-	vector <shared_ptr <wxBitmap>> importedSprites;
+	vector <shared_ptr <wxImage>> importedSprites;
 	vector <EditorSpriteIDs *> editorSpriteIDs;
+	vector <wxWindow *> controlsToDisableOnPreview;
+	stack <OperationInfo> undoStack, redoStack;
 
 	void OnCreateNewFiles(wxCommandEvent & event);
 	void OnOpenDatSprDialog(wxCommandEvent & event);
@@ -192,10 +227,14 @@ private:
 	void OnClickNextLayerButton(wxCommandEvent & event);
 	void OnClickPrevFrameButton(wxCommandEvent & event);
 	void OnClickNextFrameButton(wxCommandEvent & event);
+	void OnPreviewFPSChanged(wxSpinEvent & event);
+	void OnClickPreviewAnimationButton(wxCommandEvent & event);
+	void OnPreviewTimerEvent(wxTimerEvent & event);
 	void OnClickNewObjectButton(wxCommandEvent & event);
 	void OnClickDeleteObjectButton(wxCommandEvent & event);
 	void OnClickImportSpriteButton(wxCommandEvent & event);
 	void OnClickImportedOrObjectSprite(wxMouseEvent & event);
+	void OnRightClickObjectSprite(wxMouseEvent & event);
 	void OnToggleAlwaysAnimatedAttr(wxCommandEvent & event);
 	void OnToggleBlendLayersCheckbox(wxCommandEvent & event);
 	void OnToggleIsFullGroundAttr(wxCommandEvent & event);
@@ -209,12 +248,19 @@ private:
 	void OnElevationChanged(wxCommandEvent & event);
 	void OnExit(wxCommandEvent & event);
 	void OnClose(wxCloseEvent & event);
+	void OnUndo(wxCommandEvent & event);
+	void OnRedo(wxCommandEvent & event);
 	void OnAdvancedAttributesDialog(wxCommandEvent & event);
 	void OnAdvancedAttributesChanged(wxCommandEvent & event);
 	void OnGenerateRMEDialog(wxCommandEvent & event);
 	void OnRMEResourcesGenerated(wxCommandEvent & event);
+	void OnSpritesCleanupDialog(wxCommandEvent & event);
+	void OnSpritesCleanedUp(wxCommandEvent & event);
 	void OnQuickGuide(wxCommandEvent & event);
 	void OnAbout(wxCommandEvent & event);
+	void OnExportSpriteMenu(wxCommandEvent & event);
+	void OnExportComposedPictureMenu(wxCommandEvent & event);
+	void OnDeleteSpriteMenu(wxCommandEvent & event);
 	bool checkDirty();
 	void fillObjectsListBox(unsigned int selectedIndex = 0);
 	void setAttributeValues(bool isNewObject = false);
@@ -226,6 +272,10 @@ private:
 	void clearAnimationSpriteSelection(wxGenericStaticBitmap * staticBitmap);
 	void resizeObjectSpriteIDsArray(shared_ptr <DatObject> object);
 	void deleteSelectedObject();
+	void startAnimationPreview();
+	void stopAnimationPreview();
+	void addOperationInfo(OperationID operationID, int oldValue, int newValue, bool chained = false);
+	void addOperationInfo(OperationID operationID, wxString oldValue, wxString newValue, bool chained = false);
 
 	wxDECLARE_EVENT_TABLE();
 

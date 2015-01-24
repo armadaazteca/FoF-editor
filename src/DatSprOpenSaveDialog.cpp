@@ -77,7 +77,7 @@ DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
 	aoaButton->Enable(attsCheckboxValue);
 
 	progress = new wxGauge(panel, -1, 100);
-	auto openSaveButton = (mode == MODE_OPEN ? new wxButton(panel, wxID_OPEN) : new wxButton(panel, wxID_SAVE));
+	auto openSaveButton = (mode == MODE_OPEN ? new wxButton(panel, wxID_OPEN, "Open") : new wxButton(panel, wxID_SAVE, "Save"));
 	openSaveButton->SetFocus();
 
 	int currentRow = 0;

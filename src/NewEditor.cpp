@@ -12,7 +12,7 @@ bool NewEditor::OnInit()
 {
 	wxImage::AddHandler(new wxPNGHandler());
 	const wxString & appTitle = wxString::Format("%s %s", Config::APP_NAME, Config::VERSION_STRING);
-	MainWindow * win = new MainWindow(appTitle, wxDefaultPosition, wxSize(DEFAULT_WIDTH, DEFAULT_HEIGHT));
+	MainWindow * win = new MainWindow(appTitle, wxDefaultPosition, wxSize(Config::MAIN_WINDOW_WIDTH, Config::MAIN_WINDOW_HEIGHT));
 	win->Show(true);
 	win->Center();
 	return true;

@@ -29,6 +29,7 @@ public:
 	bool writeAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	shared_ptr <DatObjectList> getObjects(DatObjectCategory category);
 	inline shared_ptr <SpriteMap> getSprites() { return sprites; }
+	inline void setSprites(shared_ptr <SpriteMap> sprites) { this->sprites = sprites; }
 	inline unsigned int getMaxSpriteId() { return maxSpriteId; }
 	inline unsigned int incrementMaxSpriteId() { return maxSpriteId++; } // return first, then increment
 

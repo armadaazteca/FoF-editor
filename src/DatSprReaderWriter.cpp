@@ -56,7 +56,7 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 		{
 			currentList = lists[category];
 			size = sizes[category];
-			for (id = category == CategoryItem ? 100 : 1; id <= size; id++)
+			for (id = (category == CategoryItem ? 100 : 1); id <= size; id++)
 			{
 				object = make_shared <DatObject> ();
 				memset(object->allAttrs, 0, AttrLast);

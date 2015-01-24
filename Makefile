@@ -2,9 +2,9 @@ CC=g++
 FLAGS_debug=-g -O0 -Wall -std=c++11 `wx-config --cppflags`
 FLAGS_release=-O4 -std=c++11 `wx-config --cppflags`
 OBJECTS=obj/$(CONF)/NewEditor.o obj/$(CONF)/MainWindow.o obj/$(CONF)/DatSprOpenSaveDialog.o \
-        obj/$(CONF)/AdvancedAttributesDialog.o obj/$(CONF)/GenerateRMEDialog.o obj/$(CONF)/AboutDialog.o \
-        obj/$(CONF)/DatSprReaderWriter.o obj/$(CONF)/AdvancedAttributesManager.o \
-        obj/$(CONF)/ItemsOtbWriter.o obj/$(CONF)/XmlWriter.o \
+        obj/$(CONF)/AdvancedAttributesDialog.o obj/$(CONF)/GenerateRMEDialog.o \
+				obj/$(CONF)/SpritesCleanupDialog.o obj/$(CONF)/AboutDialog.o obj/$(CONF)/DatSprReaderWriter.o \
+				obj/$(CONF)/AdvancedAttributesManager.o obj/$(CONF)/ItemsOtbWriter.o obj/$(CONF)/XmlWriter.o \
         obj/$(CONF)/QuickGuideDialog.o obj/$(CONF)/Settings.o obj/$(CONF)/Events.o obj/$(CONF)/Config.o \
         obj/$(CONF)/Utils.o obj/$(CONF)/jsoncpp.o obj/$(CONF)/pugixml.o
 RESOURCES=bin/$(CONF)/res/icons/green_arrow_left.png bin/$(CONF)/res/icons/green_arrow_top_left.png
@@ -18,8 +18,8 @@ obj/$(CONF)/NewEditor.o: src/NewEditor.cpp src/NewEditor.h src/MainWindow.h src/
 	$(CC) $(FLAGS_$(CONF)) -c src/NewEditor.cpp -o $@
 
 obj/$(CONF)/MainWindow.o: src/MainWindow.cpp src/MainWindow.h src/DatSprOpenSaveDialog.h src/AboutDialog.h \
-                          src/AdvancedAttributesDialog.h src/GenerateRMEDialog.h src/QuickGuideDialog.h \
-                          src/DatSprReaderWriter.h src/Events.h src/Config.h src/Utils.h
+                          src/AdvancedAttributesDialog.h src/GenerateRMEDialog.h src/SpritesCleanupDialog.h \
+                          src/QuickGuideDialog.h src/DatSprReaderWriter.h src/Events.h src/Config.h src/Utils.h
 	$(CC) $(FLAGS_$(CONF)) -c src/MainWindow.cpp -o $@
 
 obj/$(CONF)/DatSprOpenSaveDialog.o: src/DatSprOpenSaveDialog.cpp src/DatSprOpenSaveDialog.h src/Settings.h \
@@ -33,6 +33,10 @@ obj/$(CONF)/AdvancedAttributesDialog.o: src/AdvancedAttributesDialog.cpp src/Adv
 obj/$(CONF)/GenerateRMEDialog.o: src/GenerateRMEDialog.cpp src/GenerateRMEDialog.h src/Settings.h src/ItemsOtbWriter.h \
                                  src/DatSprReaderWriter.h src/XmlWriter.h src/Events.h src/Config.h src/Interfaces.h
 	$(CC) $(FLAGS_$(CONF)) -c src/GenerateRMEDialog.cpp -o $@
+	
+obj/$(CONF)/SpritesCleanupDialog.o: src/SpritesCleanupDialog.cpp src/SpritesCleanupDialog.h \
+                                    src/SpritesCleanupDialog.h src/Events.h src/Interfaces.h
+	$(CC) $(FLAGS_$(CONF)) -c src/SpritesCleanupDialog.cpp -o $@
 	
 obj/$(CONF)/AboutDialog.o: src/AboutDialog.cpp src/AboutDialog.h src/Config.h
 	$(CC) $(FLAGS_$(CONF)) -c src/AboutDialog.cpp -o $@

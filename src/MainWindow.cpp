@@ -1,5 +1,6 @@
 #include <math.h>
 #include <fstream>
+#include <algorithm>
 #include <wx/wxprec.h>
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
@@ -17,6 +18,7 @@
 #include "AdvancedAttributesDialog.h"
 #include "AdvancedAttributesManager.h"
 #include "GenerateRMEDialog.h"
+#include "SpritesCleanupDialog.h"
 #include "QuickGuideDialog.h"
 #include "AboutDialog.h"
 #include "DatSprReaderWriter.h"
@@ -26,6 +28,8 @@ const wxString & MainWindow::DIRECTION_QUESTION_TITLE = "Create direction?";
 const wxString MainWindow::CATEGORIES[] = { "Items", "Creatures", "Effects", "Projectiles" };
 const wxString & STR_ZERO = "0";
 const wxString & OBJ_ATTR_CHANGE_STATUS_MSG = "Object \"%s\" attribute set to %s";
+const wxString & UNDONE_MSG = "Undone %s";
+const wxString & REDONE_MSG = "Redone %s";
 
 wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_CLOSE(MainWindow::OnClose)
@@ -33,14 +37,21 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_MENU(wxID_OPEN, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_SAVE, MainWindow::OnOpenDatSprDialog)
 	EVT_MENU(wxID_EXIT, MainWindow::OnExit)
+	EVT_MENU(wxID_UNDO, MainWindow::OnUndo)
+	EVT_MENU(wxID_REDO, MainWindow::OnRedo)
 	EVT_MENU(ID_MENU_EDIT_ADVANCED_ATTRS, MainWindow::OnAdvancedAttributesDialog)
 	EVT_MENU(ID_MENU_GENERATE_RME, MainWindow::OnGenerateRMEDialog)
+	EVT_MENU(ID_MENU_CLEANUP_SPRITES, MainWindow::OnSpritesCleanupDialog)
 	EVT_MENU(ID_MENU_QUICK_GUIDE, MainWindow::OnQuickGuide)
 	EVT_MENU(wxID_ABOUT, MainWindow::OnAbout)
+	EVT_MENU(ID_MENU_EXPORT_SPRITE, MainWindow::OnExportSpriteMenu)
+	EVT_MENU(ID_MENU_EXPORT_COMPOSED, MainWindow::OnExportComposedPictureMenu)
+	EVT_MENU(ID_MENU_DELETE_SPRITE, MainWindow::OnDeleteSpriteMenu)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_LOADED, MainWindow::OnDatSprLoaded)
 	EVT_COMMAND(wxID_ANY, DAT_SPR_SAVED, MainWindow::OnDatSprSaved)
 	EVT_COMMAND(wxID_ANY, RME_RES_GENERATED, MainWindow::OnRMEResourcesGenerated)
 	EVT_COMMAND(wxID_ANY, ADV_ATTRS_CHANGED, MainWindow::OnAdvancedAttributesChanged)
+	EVT_COMMAND(wxID_ANY, SPRITES_CLEANED_UP, MainWindow::OnSpritesCleanedUp)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
 	EVT_SPINCTRL(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
@@ -65,6 +76,9 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_BUTTON(ID_NEXT_LAYER_BUTTON, MainWindow::OnClickNextLayerButton)
 	EVT_BUTTON(ID_PREV_FRAME_BUTTON, MainWindow::OnClickPrevFrameButton)
 	EVT_BUTTON(ID_NEXT_FRAME_BUTTON, MainWindow::OnClickNextFrameButton)
+	EVT_SPINCTRL(ID_PREVIEW_FPS_INPUT, MainWindow::OnPreviewFPSChanged)
+	EVT_BUTTON(ID_PREVIEW_ANIMATION_BUTTON, MainWindow::OnClickPreviewAnimationButton)
+	EVT_TIMER(ID_PREVIEW_TIMER, MainWindow::OnPreviewTimerEvent)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
 	EVT_BUTTON(ID_DELETE_OBJECT_BUTTON, MainWindow::OnClickDeleteObjectButton)
 	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
@@ -97,16 +111,26 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	menuFile->FindChildItem(wxID_SAVE)->Enable(false);
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
+	menuEdit = new wxMenu();
+	menuEdit->Append(wxID_UNDO);
+	menuEdit->Append(wxID_REDO, "Redo\tCtrl+Y");
+	menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
+	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	menuEdit->AppendSeparator();
+	menuEdit->Append(wxID_PREFERENCES);
 	menuTools = new wxMenu();
-	menuTools->Append(ID_MENU_EDIT_ADVANCED_ATTRS, "Edit advanced attributes...\tCtrl-E");
-	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources...\tCtrl-G");
+	menuTools->Append(ID_MENU_EDIT_ADVANCED_ATTRS, "Edit advanced attributes...\tCtrl+E");
+	menuTools->Append(ID_MENU_GENERATE_RME, "Generate RME resources...\tCtrl+G");
+	menuTools->Append(ID_MENU_CLEANUP_SPRITES, "Clean-up unused sprites...\tCtrl+U");
 	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable(false);
 	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable(false);
+	menuTools->FindChildItem(ID_MENU_CLEANUP_SPRITES)->Enable(false);
 	menuHelp = new wxMenu();
 	menuHelp->Append(ID_MENU_QUICK_GUIDE, "Quick guide");
 	menuHelp->Append(wxID_ABOUT);
 	auto menuBar = new wxMenuBar();
 	menuBar->Append(menuFile, "&File");
+	menuBar->Append(menuEdit, "&Edit");
 	menuBar->Append(menuTools, "&Tools");
 	menuBar->Append(menuHelp, "&Help");
 	SetMenuBar(menuBar);
@@ -158,24 +182,28 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	wxBitmap dirTopLeftButtonIcon(arrowIconDiagonalImage);
 	dirTopLeftButton->SetBitmap(dirTopLeftButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirTopLeftButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirTopLeftButton);
 
 	auto dirTopButton = new wxButton(animationPanel, ID_DIR_TOP_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate90();
 	wxBitmap dirTopButtonIcon(arrowIconImage);
 	dirTopButton->SetBitmap(dirTopButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirTopButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirTopButton);
 
 	auto dirTopRightButton = new wxButton(animationPanel, ID_DIR_TOP_RIGHT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconDiagonalImage = arrowIconDiagonalImage.Rotate90();
 	wxBitmap dirTopRightButtonIcon(arrowIconDiagonalImage);
 	dirTopRightButton->SetBitmap(dirTopRightButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirTopRightButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirTopRightButton);
 
 	auto dirLeftButton = new wxButton(animationPanel, ID_DIR_LEFT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate90(false);
 	wxBitmap dirLeftButtonIcon(arrowIconImage);
 	dirLeftButton->SetBitmap(dirLeftButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirLeftButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirLeftButton);
 
 	animationMainGridSizer->Add(32, 32); // placeholder for sprite holders
 
@@ -184,24 +212,28 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	wxBitmap dirRightButtonIcon(arrowIconImage);
 	dirRightButton->SetBitmap(dirRightButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirRightButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirRightButton);
 
 	auto dirBottomLeftButton = new wxButton(animationPanel, ID_DIR_BOTTOM_LEFT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconDiagonalImage = arrowIconDiagonalImage.Rotate180();
 	wxBitmap dirBottomLeftButtonIcon(arrowIconDiagonalImage);
 	dirBottomLeftButton->SetBitmap(dirBottomLeftButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirBottomLeftButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirBottomLeftButton);
 
 	auto dirBottomButton = new wxButton(animationPanel, ID_DIR_BOTTOM_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconImage = arrowIconImage.Rotate90();
 	wxBitmap dirBottomButtonIcon(arrowIconImage);
 	dirBottomButton->SetBitmap(dirBottomButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirBottomButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirBottomButton);
 
 	auto dirBottomRightButton = new wxButton(animationPanel, ID_DIR_BOTTOM_RIGHT_BUTTON, "", wxDefaultPosition, wxSize(32, 32));
 	arrowIconDiagonalImage = arrowIconDiagonalImage.Rotate90(false);
 	wxBitmap dirBottomRightButtonIcon(arrowIconDiagonalImage);
 	dirBottomRightButton->SetBitmap(dirBottomRightButtonIcon, wxLEFT);
 	animationMainGridSizer->Add(dirBottomRightButton, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(dirBottomRightButton);
 
 	animationPanelSizer->Add(animationMainGridSizer, 0, wxALIGN_CENTER);
 
@@ -223,29 +255,35 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto widthSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto widthLabel = new wxStaticText(animationPanel, -1, "Width:");
 	widthSizer->Add(widthLabel, 0, wxALIGN_CENTER_VERTICAL);
+	controlsToDisableOnPreview.push_back(widthLabel);
 	animationWidthInput = new wxSpinCtrl(animationPanel, ID_ANIM_WIDTH_INPUT, "1", wxDefaultPosition,
 	                                     wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	animationWidthInput->SetRange(1, Config::MAX_OBJECT_WIDTH);
 	widthSizer->Add(animationWidthInput, 0, wxLEFT | wxRIGHT, 5);
+	controlsToDisableOnPreview.push_back(animationWidthInput);
 	animationSettingsGridSizer->Add(widthSizer, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
 
 	auto heightSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto heightLabel = new wxStaticText(animationPanel, -1, "Height:");
+	controlsToDisableOnPreview.push_back(heightLabel);
 	heightSizer->Add(heightLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
 	animationHeightInput = new wxSpinCtrl(animationPanel, ID_ANIM_HEIGHT_INPUT, "1", wxDefaultPosition,
 	                                      wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	animationHeightInput->SetRange(1, Config::MAX_OBJECT_HEIGHT);
 	heightSizer->Add(animationHeightInput, 0, wxLEFT, 5);
+	controlsToDisableOnPreview.push_back(animationHeightInput);
 	animationSettingsGridSizer->Add(heightSizer, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
 
 	// pattern width / height and xDiv / yDiv controls
 	auto patternWidthBox = new wxBoxSizer(wxHORIZONTAL);
 	auto patternWidthLabel = new wxStaticText(animationPanel, wxID_ANY, "Pattern width:");
 	patternWidthBox->Add(patternWidthLabel, 0, wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(patternWidthLabel);
 	patternWidthInput = new wxSpinCtrl(animationPanel, ID_PATTERN_WIDTH_INPUT, "1", wxDefaultPosition,
                                      wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	patternWidthInput->SetRange(1, Config::MAX_XY_DIV);
 	patternWidthBox->Add(patternWidthInput, 0, wxLEFT | wxRIGHT, 5);
+	controlsToDisableOnPreview.push_back(patternWidthInput);
 	animationSettingsGridSizer->Add(patternWidthBox, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
 
 	wxFont monospaceFont = wxSystemSettings::GetFont(wxSYS_SYSTEM_FONT);
@@ -255,76 +293,94 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto prevXDivButton = new wxButton(animationPanel, ID_PREV_XDIV_BUTTON, "<", wxDefaultPosition,
 	                                   wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	xDivBox->Add(prevXDivButton, 0, wxLEFT, 5);
+	controlsToDisableOnPreview.push_back(prevXDivButton);
 	auto xDivLabel = new wxStaticText(animationPanel, wxID_ANY, "xDiv:");
 	xDivLabel->SetFont(monospaceFont);
 	xDivBox->Add(xDivLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(xDivLabel);
 	currentXDivLabel = new wxStaticText(animationPanel, wxID_ANY, STR_ZERO);
 	currentXDivLabel->SetFont(monospaceFont);
 	xDivBox->Add(currentXDivLabel, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(currentXDivLabel);
 	auto nextXDivButton = new wxButton(animationPanel, ID_NEXT_XDIV_BUTTON, ">", wxDefaultPosition,
 	                                   wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	xDivBox->Add(nextXDivButton);
+	controlsToDisableOnPreview.push_back(nextXDivButton);
 	animationSettingsGridSizer->Add(xDivBox, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
 
 	auto patternHeightBox = new wxBoxSizer(wxHORIZONTAL);
 	auto patternHeightLabel = new wxStaticText(animationPanel, wxID_ANY, "Pattern height:");
 	patternHeightBox->Add(patternHeightLabel, 0, wxALIGN_CENTER_VERTICAL);
+	controlsToDisableOnPreview.push_back(patternHeightLabel);
 	patternHeightInput = new wxSpinCtrl(animationPanel, ID_PATTERN_HEIGHT_INPUT, "1", wxDefaultPosition,
 																		 wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	patternHeightInput->SetRange(1, Config::MAX_XY_DIV);
 	patternHeightBox->Add(patternHeightInput, 0, wxLEFT | wxRIGHT, 5);
+	controlsToDisableOnPreview.push_back(patternHeightInput);
 	animationSettingsGridSizer->Add(patternHeightBox, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
 
 	auto yDivBox = new wxBoxSizer(wxHORIZONTAL);
 	auto prevYDivButton = new wxButton(animationPanel, ID_PREV_YDIV_BUTTON, "<", wxDefaultPosition,
 																		 wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	yDivBox->Add(prevYDivButton, 0, wxLEFT, 5);
+	controlsToDisableOnPreview.push_back(prevYDivButton);
 	auto yDivLabel = new wxStaticText(animationPanel, wxID_ANY, "yDiv:");
 	yDivLabel->SetFont(monospaceFont);
 	yDivBox->Add(yDivLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(yDivLabel);
 	currentYDivLabel = new wxStaticText(animationPanel, wxID_ANY, STR_ZERO);
 	currentYDivLabel->SetFont(monospaceFont);
 	yDivBox->Add(currentYDivLabel, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(currentYDivLabel);
 	auto nextYDivButton = new wxButton(animationPanel, ID_NEXT_YDIV_BUTTON, ">", wxDefaultPosition,
 																		 wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	yDivBox->Add(nextYDivButton);
+	controlsToDisableOnPreview.push_back(nextYDivButton);
 	animationSettingsGridSizer->Add(yDivBox, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
 
 	// layer controls
 	auto layersCountSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto layersCountLabel = new wxStaticText(animationPanel, -1, "Layers count:");
 	layersCountSizer->Add(layersCountLabel, 0, wxALIGN_CENTER_VERTICAL);
+	controlsToDisableOnPreview.push_back(layersCountLabel);
 	layersCountInput = new wxSpinCtrl(animationPanel, ID_LAYERS_COUNT_INPUT, "1", wxDefaultPosition,
 	                                  wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	layersCountInput->SetRange(1, Config::MAX_LAYERS);
 	layersCountSizer->Add(layersCountInput, 0, wxLEFT | wxRIGHT, 5);
-	animationSettingsGridSizer->Add(layersCountSizer, 0, wxALIGN_RIGHT);
+	controlsToDisableOnPreview.push_back(layersCountInput);
+	animationSettingsGridSizer->Add(layersCountSizer, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
 
 	currentLayer = 0;
 	auto layerControlsSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto prevLayerButton = new wxButton(animationPanel, ID_PREV_LAYER_BUTTON, "<", wxDefaultPosition,
 																			wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	layerControlsSizer->Add(prevLayerButton, 0, wxLEFT, 5);
+	controlsToDisableOnPreview.push_back(prevLayerButton);
 	auto currentLayerLabel = new wxStaticText(animationPanel, -1, "lr #:");
 	currentLayerLabel->SetFont(monospaceFont);
 	layerControlsSizer->Add(currentLayerLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(currentLayerLabel);
 	currentLayerNumber = new wxStaticText(animationPanel, -1, STR_ZERO);
 	currentLayerNumber->SetFont(monospaceFont);
 	layerControlsSizer->Add(currentLayerNumber, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(currentLayerNumber);
 	auto nextLayerButton = new wxButton(animationPanel, ID_NEXT_LAYER_BUTTON, ">", wxDefaultPosition,
 																			wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	layerControlsSizer->Add(nextLayerButton);
+	controlsToDisableOnPreview.push_back(nextLayerButton);
 	animationSettingsGridSizer->Add(layerControlsSizer, 0, wxALIGN_LEFT);
 
 	// amount of frames setting
 	auto amountOfFramesSizer = new wxBoxSizer(wxHORIZONTAL);
 	auto amountOfFramesLabel = new wxStaticText(animationPanel, -1, "Amount of frames:");
 	amountOfFramesSizer->Add(amountOfFramesLabel, 0, wxALIGN_CENTER_VERTICAL);
+	controlsToDisableOnPreview.push_back(amountOfFramesLabel);
 	amountOfFramesInput = new wxSpinCtrl(animationPanel, ID_FRAMES_AMOUNT_INPUT, "1", wxDefaultPosition,
 																			 wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	amountOfFramesInput->SetRange(1, Config::MAX_ANIM_FRAMES);
 	amountOfFramesSizer->Add(amountOfFramesInput, 0, wxLEFT | wxRIGHT, 5);
-	animationSettingsGridSizer->Add(amountOfFramesSizer, 0, wxALIGN_RIGHT);
+	controlsToDisableOnPreview.push_back(amountOfFramesInput);
+	animationSettingsGridSizer->Add(amountOfFramesSizer, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
 
 	// frame controls
 	currentFrame = 0;
@@ -332,32 +388,55 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	auto prevFrameButton = new wxButton(animationPanel, ID_PREV_FRAME_BUTTON, "<", wxDefaultPosition,
 	                                    wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	frameControlsSizer->Add(prevFrameButton, 0, wxLEFT, 5);
+	controlsToDisableOnPreview.push_back(prevFrameButton);
 	auto currentFrameLabel = new wxStaticText(animationPanel, -1, "fr #:");
 	currentFrameLabel->SetFont(monospaceFont);
 	frameControlsSizer->Add(currentFrameLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(currentFrameLabel);
 	currentFrameNumber = new wxStaticText(animationPanel, -1, STR_ZERO);
 	currentFrameNumber->SetFont(monospaceFont);
 	frameControlsSizer->Add(currentFrameNumber, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
+	controlsToDisableOnPreview.push_back(currentFrameNumber);
 	auto nextFrameButton = new wxButton(animationPanel, ID_NEXT_FRAME_BUTTON, ">", wxDefaultPosition,
 	                                    wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	frameControlsSizer->Add(nextFrameButton);
+	controlsToDisableOnPreview.push_back(nextFrameButton);
 	animationSettingsGridSizer->Add(frameControlsSizer, 0, wxALIGN_LEFT);
 
 	// always animated setting
 	alwaysAnimatedCheckbox = new wxCheckBox(animationPanel, ID_ALWAYS_ANIMATED_CHECKBOX, "Always animated");
 	animationSettingsGridSizer->Add(alwaysAnimatedCheckbox, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(alwaysAnimatedCheckbox);
 
 	// always animated setting
 	doBlendLayers = true;
 	blendLayersCheckbox = new wxCheckBox(animationPanel, ID_BLEND_LAYERS_CHECKBOX, "Blend layers");
 	blendLayersCheckbox->SetValue(doBlendLayers);
 	animationSettingsGridSizer->Add(blendLayersCheckbox, 0, wxALIGN_CENTER);
+	controlsToDisableOnPreview.push_back(blendLayersCheckbox);
+
+	// animation preview
+	auto fpsSizer = new wxBoxSizer(wxHORIZONTAL);
+	auto fpsLabel = new wxStaticText(animationPanel, -1, "Preview FPS:");
+	fpsSizer->Add(fpsLabel, 0, wxALIGN_CENTER_VERTICAL);
+	previewFpsInput = new wxSpinCtrl(animationPanel, ID_PREVIEW_FPS_INPUT, "1", wxDefaultPosition,
+	                                 wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+	previewFpsInput->SetRange(1, Config::MAX_PREVIEW_FPS);
+	auto & fpsSetting = Settings::getInstance().get("previewFPS");
+	if (fpsSetting.Length()) previewFpsInput->SetValue(wxAtoi(fpsSetting));
+	fpsSizer->Add(previewFpsInput, 0, wxLEFT | wxRIGHT, 5);
+	animationSettingsGridSizer->Add(fpsSizer, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+
+	auto previewButton = new wxButton(animationPanel, ID_PREVIEW_ANIMATION_BUTTON, "Preview animation");
+	animationSettingsGridSizer->Add(previewButton, 0, wxALIGN_CENTER);
 
 	animationPanelSizer->Add(animationSettingsGridSizer, 0, wxALIGN_CENTER);
 	animationPanel->SetSizer(animationPanelSizer);
 	animationBoxExpandSizer->Add(animationPanel, 0, wxALIGN_CENTER);
 	animationBoxSizer->Add(animationBoxExpandSizer, 1, wxEXPAND);
 	midColumnGrid->Add(animationBoxSizer, 1, wxEXPAND);
+
+	previewTimer = unique_ptr <wxTimer> (new wxTimer(this, ID_PREVIEW_TIMER));
 
 	// boolean attributes
 	auto booleanAttrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Boolean attributes");
@@ -551,6 +630,12 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 	menuFile->FindChildItem(wxID_SAVE)->Enable();
 	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable();
 	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable();
+	menuTools->FindChildItem(ID_MENU_CLEANUP_SPRITES)->Enable();
+
+	undoStack = stack <OperationInfo> (); // clearing
+	redoStack = stack <OperationInfo> (); // stacks
+	menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
+	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
 
 	DatSprReaderWriter::getInstance().initNewData();
 	mainPanel->Enable();
@@ -562,8 +647,11 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 
 void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
 {
-	// TODO: confirmation of unsaved previous changes required here
+	if (isPreviewAnimationOn) stopAnimationPreview();
+
 	bool isModeOpen = event.GetId() == wxID_OPEN;
+	if (isModeOpen && !checkDirty()) return;
+
 	auto & dsrw = DatSprReaderWriter::getInstance();
 	if (!isModeOpen)
 	{
@@ -579,7 +667,7 @@ void MainWindow::OnOpenDatSprDialog(wxCommandEvent & event)
 		}
 		if (!hasObjects)
 		{
-			wxMessageBox("There are no objects to save", "Error", wxOK | wxICON_ERROR);
+			wxMessageBox("There are no objects to save", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
 			return;
 		}
 	}
@@ -608,6 +696,12 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 	menuFile->FindChildItem(wxID_SAVE)->Enable();
 	menuTools->FindChildItem(ID_MENU_EDIT_ADVANCED_ATTRS)->Enable();
 	menuTools->FindChildItem(ID_MENU_GENERATE_RME)->Enable();
+	menuTools->FindChildItem(ID_MENU_CLEANUP_SPRITES)->Enable();
+
+	undoStack = stack <OperationInfo> (); // clearing
+	redoStack = stack <OperationInfo> (); // stacks
+	menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
+	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
 
 	statusBar->SetStatusText("Files have been loaded successfully");
 }
@@ -620,6 +714,8 @@ void MainWindow::OnDatSprSaved(wxCommandEvent & event)
 
 void MainWindow::OnObjectCategoryChanged(wxCommandEvent & event)
 {
+	if (isPreviewAnimationOn) stopAnimationPreview();
+
 	const wxString & category = categoryComboBox->GetValue();
 	if (category == CATEGORIES[CategoryItem])
 	{
@@ -698,6 +794,8 @@ void MainWindow::fillObjectsListBox(unsigned int selectedIndex)
 
 void MainWindow::OnObjectSelected(wxCommandEvent & event)
 {
+	if (isPreviewAnimationOn) stopAnimationPreview();
+
 	animationPanel->Enable();
 	booleanAttrsPanel->Enable();
 	valueAttrsPanel->Enable();
@@ -1046,16 +1144,18 @@ void MainWindow::fillObjectSprites()
 				hasAtLeastOneSprite = true;
 				wxImage image(32, 32, sprite->rgb.get(), sprite->alpha.get(), true);
 				wxBitmap bitmap(image);
-				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, -1, bitmap);
+				staticBitmap = new wxGenericStaticBitmap(objectSpritesPanel, ID_OBJ_SPRITES_GSB, bitmap);
 
 				auto esi = new EditorSpriteIDs();
 				esi->setType(EditorSpriteIDs::EXISTING);
+				esi->setObjectSpriteIndex(i);
 				esi->getSpriteIDs().push_back(sprite->id);
 				esi->setIndexInVector(editorSpriteIDs.size());
 				editorSpriteIDs.push_back(esi);
 				staticBitmap->SetClientData(esi);
 
 				staticBitmap->Bind(wxEVT_LEFT_DOWN, &MainWindow::OnClickImportedOrObjectSprite, this);
+				staticBitmap->Bind(wxEVT_RIGHT_UP, &MainWindow::OnRightClickObjectSprite, this);
 
 				objectSpritesPanelSizer->Add(staticBitmap, 0, wxALL, 5);
 				spriteIdLabel = new wxStaticText(objectSpritesPanel, -1, wxString::Format("%i", spriteId));
@@ -1140,7 +1240,7 @@ void MainWindow::buildAnimationSpriteHolders()
 	unsigned int wByH = width * height;
 	for (unsigned int i = 0; i < wByH; ++i)
 	{
-		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, -1, *stubImage);
+		animationSpriteBitmaps[i] = new wxGenericStaticBitmap(animationSpritesPanel, ID_GRID_GSB, *stubImage);
 		animationSpritesSizer->Add(animationSpriteBitmaps[i]);
 
 		// for sprites drag & drop
@@ -1151,31 +1251,19 @@ void MainWindow::buildAnimationSpriteHolders()
 
 		auto onEnter = [&](wxMouseEvent & event)
 		{
+			if (isPreviewAnimationOn) return;
 			wxGenericStaticBitmap * sBmp = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
 			drawAnimationSpriteSelection(sBmp);
 		};
 		auto onLeave = [&](wxMouseEvent & event)
 		{
+			if (isPreviewAnimationOn) return;
 			wxGenericStaticBitmap * sBmp = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
 			clearAnimationSpriteSelection(sBmp);
 		};
-		auto onRightClick = [&](wxMouseEvent & event)
-		{
-			wxGenericStaticBitmap * sBmp = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
-			wxBitmap emptyBitmap(*stubImage);
-			sBmp->SetBitmap(emptyBitmap);
-			drawAnimationSpriteSelection(sBmp);
-			AnimationSpriteDropTarget * dropTarget = dynamic_cast <AnimationSpriteDropTarget *> (sBmp->GetDropTarget());
-			unsigned int spriteHolderIndex = dropTarget->getSpriteHolderIndex();
-			unsigned int frameSize = selectedObject->width * selectedObject->height;
-			unsigned int spriteIdIndex = (currentXDiv + currentFrame
-			                           * selectedObject->patternWidth) * frameSize + (frameSize - 1 - spriteHolderIndex);
-			selectedObject->spriteIDs[spriteIdIndex] = 0;
-			fillObjectSprites();
-		};
 		animationSpriteBitmaps[i]->Bind(wxEVT_ENTER_WINDOW, onEnter);
 		animationSpriteBitmaps[i]->Bind(wxEVT_LEAVE_WINDOW, onLeave);
-		animationSpriteBitmaps[i]->Bind(wxEVT_RIGHT_UP, onRightClick);
+		animationSpriteBitmaps[i]->Bind(wxEVT_RIGHT_UP, &MainWindow::OnRightClickObjectSprite, this);
 	}
 
 	animationSpritesPanel->SetSizer(animationSpritesSizer, true);
@@ -1246,7 +1334,10 @@ void MainWindow::fillAnimationSprites()
 void MainWindow::OnAnimWidthChanged(wxSpinEvent & event)
 {
 	if (!animationWidthInput) return;
+	
 	unsigned int val = animationWidthInput->GetValue();
+	addOperationInfo(ANIM_WIDTH_CHANGE, selectedObject->width, val);
+	
 	selectedObject->width = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
@@ -1260,7 +1351,10 @@ void MainWindow::OnAnimWidthChanged(wxSpinEvent & event)
 void MainWindow::OnAnimHeightChanged(wxSpinEvent & event)
 {
 	if (!animationHeightInput) return;
+
 	unsigned int val = animationHeightInput->GetValue();
+	addOperationInfo(ANIM_HEIGHT_CHANGE, selectedObject->height, val);
+	
 	selectedObject->height = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
@@ -1274,7 +1368,10 @@ void MainWindow::OnAnimHeightChanged(wxSpinEvent & event)
 void MainWindow::OnFramesAmountChanged(wxSpinEvent & event)
 {
 	if (!amountOfFramesInput) return;
+
 	unsigned int val = amountOfFramesInput->GetValue();
+	addOperationInfo(AMOUNT_OF_FRAMES_CHANGE, selectedObject->phasesCount, val);
+
 	selectedObject->phasesCount = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	buildAnimationSpriteHolders();
@@ -1299,6 +1396,7 @@ void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
 			if (confirmation.ShowModal() == wxID_YES)
 			{
 				selectedObject->patternWidth = patternWidth;
+				patternWidthInput->SetValue(selectedObject->patternWidth);
 				resizeObjectSpriteIDsArray(selectedObject);
 				xDiv = orient;
 				statusBar->SetStatusText(wxString::Format(statusMessage, orientName));
@@ -1353,6 +1451,8 @@ void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
 void MainWindow::OnPatternWidthChanged(wxSpinEvent & event)
 {
 	unsigned int val = event.GetInt();
+	addOperationInfo(PATTERN_WIDTH_CHANGE, selectedObject->patternWidth, val);
+
 	selectedObject->patternWidth = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	if (currentXDiv >= selectedObject->patternWidth)
@@ -1370,6 +1470,8 @@ void MainWindow::OnPatternWidthChanged(wxSpinEvent & event)
 void MainWindow::OnPatternHeightChanged(wxSpinEvent & event)
 {
 	unsigned int val = event.GetInt();
+	addOperationInfo(PATTERN_HEIGHT_CHANGE, selectedObject->patternHeight, val);
+
 	selectedObject->patternHeight = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	if (currentYDiv >= selectedObject->patternHeight)
@@ -1419,6 +1521,8 @@ void MainWindow::OnClickNextYDivButton(wxCommandEvent & event)
 void MainWindow::OnLayersCountChanged(wxSpinEvent & event)
 {
 	unsigned int val = event.GetInt();
+	addOperationInfo(LAYERS_COUNT_CHANGE, selectedObject->layersCount, val);
+
 	selectedObject->layersCount = val;
 	resizeObjectSpriteIDsArray(selectedObject);
 	if (currentLayer >= selectedObject->layersCount)
@@ -1465,8 +1569,70 @@ void MainWindow::OnClickNextFrameButton(wxCommandEvent & event)
 	fillAnimationSprites();
 }
 
+void MainWindow::OnPreviewFPSChanged(wxSpinEvent & event)
+{
+	if (isPreviewAnimationOn)
+	{
+		int val = previewFpsInput->GetValue();
+		auto & settings = Settings::getInstance();
+		settings.set("previewFPS", wxString::Format("%i", val));
+		settings.save();
+		previewTimer->Stop();
+		previewTimer->Start(1000 / val);
+	}
+}
+
+void MainWindow::OnClickPreviewAnimationButton(wxCommandEvent & event)
+{
+	if (!isPreviewAnimationOn)
+	{
+		startAnimationPreview();
+	}
+	else
+	{
+		stopAnimationPreview();
+	}
+	
+}
+
+void MainWindow::startAnimationPreview()
+{
+	isPreviewAnimationOn = true;
+	lastCurrentFrame = currentFrame;
+	previewTimer->Start(1000 / previewFpsInput->GetValue());
+	dynamic_cast <wxButton *> (FindWindow(ID_PREVIEW_ANIMATION_BUTTON))->SetLabelText("Stop preview");
+	statusBar->SetStatusText("Animation preview started");
+	for (auto elem : controlsToDisableOnPreview)
+	{
+		elem->Enable(false);
+	}
+}
+
+void MainWindow::stopAnimationPreview()
+{
+	isPreviewAnimationOn = false;
+	previewTimer->Stop();
+	currentFrame = lastCurrentFrame;
+	fillAnimationSprites();
+	dynamic_cast <wxButton *> (FindWindow(ID_PREVIEW_ANIMATION_BUTTON))->SetLabelText("Preview animation");
+	statusBar->SetStatusText("Animation preview stopped");
+	for (auto elem : controlsToDisableOnPreview)
+	{
+		elem->Enable(true);
+	}
+}
+
+void MainWindow::OnPreviewTimerEvent(wxTimerEvent & event)
+{
+	currentFrame++;
+	if (currentFrame >= selectedObject->phasesCount) currentFrame = 0;
+	fillAnimationSprites();
+}
+
 void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 {
+	if (isPreviewAnimationOn) stopAnimationPreview();
+
 	auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
 	auto newObject = make_shared <DatObject> ();
 	newObject->id = objects->size() + (currentCategory == CategoryItem ? 100 : 1);
@@ -1474,6 +1640,10 @@ void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
 	newObject->patternWidth = newObject->patternHeight = newObject->patternDepth = 1;
 	newObject->layersCount = newObject->phasesCount = newObject->spriteCount = 1;
 	newObject->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[1] { 0 });
+	for (int i = 0; i < AttrLast; ++i)
+	{
+		newObject->allAttrs[i] = false;
+	}
 	newObject->allAttrs[AttrLast] = true;
 	objects->push_back(newObject);
 	selectedObject = newObject;
@@ -1507,6 +1677,8 @@ void MainWindow::deleteSelectedObject()
 	auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(currentCategory);
 	if (selectedObject && wxMessageBox(msg, "Confirm delete", wxYES_NO | wxCANCEL) == wxYES)
 	{
+		if (isPreviewAnimationOn) stopAnimationPreview();
+
 		auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
 		unsigned int id = selectedObject->id, index = id - (currentCategory == CategoryItem ? 100 : 1);
 
@@ -1564,12 +1736,12 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 		settings.set("lastSpriteImportPath", wxFileName(paths[0]).GetPath());
 		settings.save();
 
-		shared_ptr <wxBitmap> bitmap = nullptr;
+		unsigned int imageID = 0;
+		shared_ptr <wxImage> image = nullptr;
 		wxGenericStaticBitmap * staticBitmap = nullptr;
 		wxStaticText * spriteLabel = nullptr;
 		wxFileName filename;
 		wxString basename;
-		unsigned int bitmapId = 0;
 		wxString errors;
 		for (auto const & p : paths)
 		{
@@ -1597,25 +1769,26 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 				continue;
 			}
 
-			bitmapId = importedSprites.size();
-			bitmap = make_shared <wxBitmap> ();
-			bitmap->LoadFile(p, wxBITMAP_TYPE_PNG);
-			if (!bitmap->IsOk())
+			imageID = importedSprites.size();
+			image = make_shared <wxImage> (p, wxBITMAP_TYPE_PNG);
+			if (image->HasMask()) image->InitAlpha(); // converting mask to alpha
+
+			if (!image->IsOk())
 			{
 				errors.Append(wxString::Format("%s has not been imported, because loading file has failed\n\n", basename));
 				continue;
 			}
-			if (bitmap->GetWidth() % 32 != 0 || bitmap->GetHeight() % 32 != 0)
+			if (image->GetWidth() % 32 != 0 || image->GetHeight() % 32 != 0)
 			{
 				errors.Append(wxString::Format("%s has not been imported, because its width and height must be multiplier of 32\n\n", basename));
 				continue;
 			}
-			importedSprites.push_back(bitmap);
-			staticBitmap = new wxGenericStaticBitmap(newSpritesPanel, -1, *bitmap);
+			importedSprites.push_back(image);
+			staticBitmap = new wxGenericStaticBitmap(newSpritesPanel, -1, wxBitmap(*image));
 
 			auto esi = new EditorSpriteIDs();
 			esi->setType(EditorSpriteIDs::IMPORTED);
-			esi->getSpriteIDs().push_back(bitmapId);
+			esi->getSpriteIDs().push_back(imageID);
 			esi->setIndexInVector(editorSpriteIDs.size());
 			editorSpriteIDs.push_back(esi);
 			staticBitmap->SetClientData(esi);
@@ -1631,7 +1804,7 @@ void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
 
 		if (errors.Length() > 0)
 		{
-			wxMessageDialog errorMsg(this, errors, "Error", wxOK | wxICON_ERROR);
+			wxMessageDialog errorMsg(this, errors, Config::ERROR_TITLE, wxOK | wxICON_ERROR);
 			errorMsg.SetMinSize(wxSize(300, -1));
 			errorMsg.ShowModal();
 			statusBar->SetStatusText("Errors occured while importing new files");
@@ -1663,9 +1836,25 @@ void MainWindow::OnClickImportedOrObjectSprite(wxMouseEvent & event)
 	dragSource.DoDragDrop(true);
 }
 
+void MainWindow::OnRightClickObjectSprite(wxMouseEvent & event)
+{
+	if (isPreviewAnimationOn) return;
+	spriteContextMenuTarget = dynamic_cast <wxGenericStaticBitmap *> (event.GetEventObject());
+	wxMenu contextMenu;
+	contextMenu.Append(ID_MENU_EXPORT_SPRITE, "Export this sprite into PNG-file");
+	if (spriteContextMenuTarget->GetId() == ID_GRID_GSB && (selectedObject->width > 1 || selectedObject->height > 1))
+	{
+		contextMenu.Append(ID_MENU_EXPORT_COMPOSED, "Export composed picture into PNG-file");
+	}
+	contextMenu.Append(ID_MENU_DELETE_SPRITE, "Delete this sprite");
+	PopupMenu(&contextMenu);
+}
+
 void MainWindow::OnToggleAlwaysAnimatedAttr(wxCommandEvent & event)
 {
 	bool value = event.GetInt() != 0;
+	addOperationInfo(ALWAYS_ANIMATED_TOGGLE, selectedObject->isAlwaysAnimated, value);
+
 	selectedObject->isAlwaysAnimated = value;
 	selectedObject->allAttrs[AttrAnimateAlways] = value;
 
@@ -1838,7 +2027,7 @@ void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
 	object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
                       * object->patternHeight * object->patternDepth * object->phasesCount;
 	object->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[object->spriteCount]);
-	unsigned int minSpriteCount = min(object->spriteCount, oldSpriteCount);
+	unsigned int minSpriteCount = std::min(object->spriteCount, oldSpriteCount);
 	for (unsigned int i = 0; i < minSpriteCount; ++i)
 	{
 		object->spriteIDs[i] = oldSpriteIDs[i];
@@ -1872,18 +2061,19 @@ void MainWindow::OnAdvancedAttributesDialog(wxCommandEvent & event)
 	{
 		if (selectedObject)
 		{
+			if (isPreviewAnimationOn) stopAnimationPreview();
 			AdvancedAttributesDialog dialog(this, currentCategory, selectedObject->id);
 			dialog.ShowModal();
 		}
 		else
 		{
-			wxMessageBox("No object selected to edit", "Error", wxOK | wxICON_ERROR);
+			wxMessageBox("No object selected to edit", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
 		}
 	}
 	else
 	{
 		wxMessageBox("Advanced attributes can only be edited for objects in \"Items\" and \"Creatures\" categories",
-		             "Error", wxOK | wxICON_ERROR);
+		             Config::ERROR_TITLE, wxOK | wxICON_ERROR);
 	}
 }
 
@@ -1896,8 +2086,9 @@ void MainWindow::OnAdvancedAttributesChanged(wxCommandEvent & event)
 
 void MainWindow::OnGenerateRMEDialog(wxCommandEvent & event)
 {
-	auto generateRMEDialog = new GenerateRMEDialog(this);
-	generateRMEDialog->ShowModal();
+	if (isPreviewAnimationOn) stopAnimationPreview();
+	GenerateRMEDialog generateRMEDialog(this);
+	generateRMEDialog.ShowModal();
 }
 
 void MainWindow::OnRMEResourcesGenerated(wxCommandEvent & event)
@@ -1905,16 +2096,305 @@ void MainWindow::OnRMEResourcesGenerated(wxCommandEvent & event)
 	statusBar->SetStatusText("RME resources have been generated successfully");
 }
 
+void MainWindow::OnSpritesCleanupDialog(wxCommandEvent & event)
+{
+	if (isPreviewAnimationOn) stopAnimationPreview();
+	if (DatSprReaderWriter::getInstance().getSprites()->size() > 0)
+	{
+		SpritesCleanupDialog spritesCleanupDialog(this);
+		spritesCleanupDialog.ShowModal();
+	}
+	else
+	{
+		wxMessageBox("There are no sprites to clean-up", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+	}
+}
+
+void MainWindow::OnSpritesCleanedUp(wxCommandEvent & event)
+{
+	fillObjectSprites();
+	fillAnimationSprites();
+	isDirty = true;
+	statusBar->SetStatusText("Cleaned-up some sprites. Don't forget to save.");
+}
+
 void MainWindow::OnQuickGuide(wxCommandEvent & event)
 {
+	if (isPreviewAnimationOn) stopAnimationPreview();
 	auto quickGuideDialog = new QuickGuideDialog(this);
 	quickGuideDialog->ShowModal();
 }
 
 void MainWindow::OnAbout(wxCommandEvent & event)
 {
+	if (isPreviewAnimationOn) stopAnimationPreview();
 	auto aboutDialog = new AboutDialog(this);
 	aboutDialog->ShowModal();
+}
+
+void MainWindow::OnExportSpriteMenu(wxCommandEvent & event)
+{
+	Settings & settings = Settings::getInstance();
+	const wxString & browseDir = settings.get("spriteExportDir");
+	wxFileDialog browseDialog(this, "Export sprite", browseDir, "sprite.png", "*.png|*.png|All files|*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if (browseDialog.ShowModal() == wxID_OK)
+	{
+		const wxString & path = browseDialog.GetPath();
+		wxFileName filename(path);
+		settings.set("spriteExportDir", filename.GetPath());
+		settings.save();
+
+		if (spriteContextMenuTarget->GetBitmap().SaveFile(path, wxBITMAP_TYPE_PNG))
+		{
+			statusBar->SetStatusText("Sprite successfully exported");
+		}
+		else
+		{
+			wxMessageBox("Sprite export failed, error occured", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+		}
+	}
+}
+
+void MainWindow::OnExportComposedPictureMenu(wxCommandEvent & event)
+{
+	Settings & settings = Settings::getInstance();
+	const wxString & browseDir = settings.get("spriteExportDir");
+	wxFileDialog browseDialog(this, "Export sprite", browseDir, "sprite.png", "*.png|*.png|All files|*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if (browseDialog.ShowModal() == wxID_OK)
+	{
+		const wxString & path = browseDialog.GetPath();
+		wxFileName filename(path);
+		settings.set("spriteExportDir", filename.GetPath());
+		settings.save();
+
+		wxBitmap composed(selectedObject->width * Config::SPRITE_SIZE, selectedObject->height * Config::SPRITE_SIZE);
+		wxMemoryDC memDC(composed);
+		unsigned int bitmapIndex = 0;
+		for (unsigned int y = 0; y < selectedObject->height; ++y)
+		{
+			for (unsigned int x = 0; x < selectedObject->width; ++x)
+			{
+				auto bmp = animationSpriteBitmaps[bitmapIndex++]->GetBitmap();
+				memDC.DrawBitmap(bmp, x * Config::SPRITE_SIZE, y * Config::SPRITE_SIZE, true);
+			}
+		}
+
+		if (composed.SaveFile(path, wxBITMAP_TYPE_PNG))
+		{
+			statusBar->SetStatusText("Composed picture successfully exported");
+		}
+		else
+		{
+			wxMessageBox("Composed picture export failed, error occured", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+		}
+	}
+}
+
+void MainWindow::OnDeleteSpriteMenu(wxCommandEvent & event)
+{
+	wxBitmap emptyBitmap(*stubImage);
+	spriteContextMenuTarget->SetBitmap(emptyBitmap);
+	if (spriteContextMenuTarget->GetId() == ID_GRID_GSB)
+	{
+		AnimationSpriteDropTarget * dropTarget = dynamic_cast <AnimationSpriteDropTarget *> (spriteContextMenuTarget->GetDropTarget());
+		unsigned int spriteHolderIndex = dropTarget->getSpriteHolderIndex();
+		unsigned int frameSize = selectedObject->width * selectedObject->height;
+		unsigned int spriteIdIndex = (currentXDiv + currentFrame
+																* selectedObject->patternWidth) * frameSize + (frameSize - 1 - spriteHolderIndex);
+		selectedObject->spriteIDs[spriteIdIndex] = 0;
+	}
+	else if (spriteContextMenuTarget->GetId() == ID_OBJ_SPRITES_GSB)
+	{
+		auto esi = (EditorSpriteIDs *) spriteContextMenuTarget->GetClientData();
+		selectedObject->spriteIDs[esi->getObjectSpriteIndex()] = 0;
+		fillAnimationSprites();
+	}
+	
+	fillObjectSprites();
+}
+
+void MainWindow::addOperationInfo(OperationID operationID, int oldValue, int newValue, bool chained)
+{
+	OperationInfo info;
+	info.operationID = operationID;
+	info.oldIntValue = oldValue;
+	info.newIntValue = newValue;
+	info.chained = chained;
+	undoStack.push(info);
+	redoStack = stack <OperationInfo> (); // clearing redos
+	menuEdit->FindChildItem(wxID_UNDO)->Enable();
+	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+}
+
+void MainWindow::addOperationInfo(OperationID operationID, wxString oldValue, wxString newValue, bool chained)
+{
+	OperationInfo info;
+	info.operationID = operationID;
+	info.oldStrValue = oldValue;
+	info.newStrValue = newValue;
+	info.chained = chained;
+	undoStack.push(info);
+	redoStack = stack <OperationInfo> (); // clearing redos
+	menuEdit->FindChildItem(wxID_UNDO)->Enable();
+	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+}
+
+void MainWindow::OnUndo(wxCommandEvent & event)
+{
+	OperationInfo info = undoStack.top();
+
+	switch (info.operationID)
+	{
+		case ANIM_WIDTH_CHANGE:
+			animationWidthInput->SetValue(info.oldIntValue);
+			selectedObject->width = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "animation width change"));
+		break;
+
+		case ANIM_HEIGHT_CHANGE:
+			animationHeightInput->SetValue(info.oldIntValue);
+			selectedObject->height = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "animation height change"));
+		break;
+
+		case PATTERN_WIDTH_CHANGE:
+			patternWidthInput->SetValue(info.oldIntValue);
+			selectedObject->patternWidth = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "pattern width change"));
+		break;
+
+		case PATTERN_HEIGHT_CHANGE:
+			patternHeightInput->SetValue(info.oldIntValue);
+			selectedObject->patternHeight = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "pattern height change"));
+		break;
+
+		case LAYERS_COUNT_CHANGE:
+			layersCountInput->SetValue(info.oldIntValue);
+			selectedObject->layersCount = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "layers count change"));
+		break;
+
+		case AMOUNT_OF_FRAMES_CHANGE:
+			amountOfFramesInput->SetValue(info.oldIntValue);
+			selectedObject->phasesCount = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "amount of frames change"));
+		break;
+
+		case ALWAYS_ANIMATED_TOGGLE:
+			alwaysAnimatedCheckbox->SetValue(info.oldIntValue != 0);
+			selectedObject->isAlwaysAnimated = (info.oldIntValue != 0);
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Always animated\" attribute toggle"));
+		break;
+
+		default:
+		break;
+	}
+
+	undoStack.pop();
+	if (undoStack.empty())
+	{
+		menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
+	}
+	redoStack.push(info);
+	menuEdit->FindChildItem(wxID_REDO)->Enable();
+}
+
+void MainWindow::OnRedo(wxCommandEvent & event)
+{
+	OperationInfo info = redoStack.top();
+	
+	switch (info.operationID)
+	{
+		case ANIM_WIDTH_CHANGE:
+			animationWidthInput->SetValue(info.newIntValue);
+			selectedObject->width = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "animation width change"));
+		break;
+
+		case ANIM_HEIGHT_CHANGE:
+			animationHeightInput->SetValue(info.newIntValue);
+			selectedObject->height = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "animation height change"));
+		break;
+
+		case PATTERN_WIDTH_CHANGE:
+			patternWidthInput->SetValue(info.newIntValue);
+			selectedObject->patternWidth = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "pattern width change"));
+		break;
+
+		case PATTERN_HEIGHT_CHANGE:
+			patternHeightInput->SetValue(info.newIntValue);
+			selectedObject->patternHeight = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "pattern height change"));
+		break;
+
+		case LAYERS_COUNT_CHANGE:
+			layersCountInput->SetValue(info.newIntValue);
+			selectedObject->layersCount = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "layers count change"));
+		break;
+
+		case AMOUNT_OF_FRAMES_CHANGE:
+			amountOfFramesInput->SetValue(info.newIntValue);
+			selectedObject->phasesCount = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(selectedObject);
+			buildAnimationSpriteHolders();
+			fillAnimationSprites();
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "amount of frames change"));
+		break;
+
+		case ALWAYS_ANIMATED_TOGGLE:
+			alwaysAnimatedCheckbox->SetValue(info.newIntValue != 0);
+			selectedObject->isAlwaysAnimated = (info.newIntValue != 0);
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Always animated\" attribute toggle"));
+		break;
+
+		default:
+		break;
+	}
+
+	redoStack.pop();
+	if (redoStack.empty())
+	{
+		menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	}
+	undoStack.push(info);
+	menuEdit->FindChildItem(wxID_UNDO)->Enable();
 }
 
 MainWindow::~MainWindow()
@@ -1928,7 +2408,9 @@ MainWindow::~MainWindow()
 bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, const wxString & data)
 {
 	bool result = false;
-
+	
+	if (mainWindow->isPreviewAnimationOn) return result;
+	
 	unsigned int esiIndexInVector = wxAtoi(data);
 	auto esi = mainWindow->editorSpriteIDs[esiIndexInVector];
 	auto obj = mainWindow->selectedObject;
@@ -1945,22 +2427,23 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 	{
 		auto sprites = DatSprReaderWriter::getInstance().getSprites();
 		auto & esiSpriteIDs = esi->getSpriteIDs();
-		auto bitmap = mainWindow->importedSprites[esiSpriteIDs[0]];
-		auto image = bitmap->ConvertToImage();
-
+		auto image = mainWindow->importedSprites[esiSpriteIDs[0]];
+		
 		void * pdp = nullptr; // pixel data pointer
-		bool hasAlpha = image.HasAlpha();
+		bool hasAlpha = image->HasAlpha();
 		if (hasAlpha)
 		{
-			pdp = new wxAlphaPixelData(*bitmap);
+			wxBitmap bmp(*image);
+			pdp = new wxAlphaPixelData(bmp);
 		}
 		else
 		{
-			pdp = new wxNativePixelData(*bitmap);
+			wxBitmap bmp(*image);
+			pdp = new wxNativePixelData(bmp);
 		}
 
-		int width = ceil(bitmap->GetWidth() / (float) Config::SPRITE_SIZE);
-		int height = ceil(bitmap->GetHeight() / (float) Config::SPRITE_SIZE);
+		int width = ceil(image->GetWidth() / (float) Config::SPRITE_SIZE);
+		int height = ceil(image->GetHeight() / (float) Config::SPRITE_SIZE);
 		esi->setType(MainWindow::EditorSpriteIDs::EXISTING);
 		esi->setBigSpriteSize(width, height);
 		esiSpriteIDs.clear();
@@ -2080,6 +2563,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 
 wxDragResult MainWindow::AnimationSpriteDropTarget::OnEnter(wxCoord x, wxCoord y, wxDragResult defResult)
 {
+	if (mainWindow->isPreviewAnimationOn) return defResult;
 	auto sBmp = mainWindow->animationSpriteBitmaps[spriteHolderIndex];
 	mainWindow->drawAnimationSpriteSelection(sBmp);
 	return defResult;
@@ -2087,6 +2571,7 @@ wxDragResult MainWindow::AnimationSpriteDropTarget::OnEnter(wxCoord x, wxCoord y
 
 void MainWindow::AnimationSpriteDropTarget::OnLeave()
 {
+	if (mainWindow->isPreviewAnimationOn) return;
 	auto sBmp = mainWindow->animationSpriteBitmaps[spriteHolderIndex];
 	mainWindow->clearAnimationSpriteSelection(sBmp);
 }

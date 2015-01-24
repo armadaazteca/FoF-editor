@@ -22,7 +22,7 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 		auto & itemAttributes = AdvancedAttributesManager::getInstance().getCategoryAttributes(CategoryItem);
 
 		writeU32(0); // write 4 bytes for file version, they aren't used really, it seems
-		file.put(NODE_START);
+		file.put((const char) NODE_START);
 		writeByte(0); // type info, seems to be unused
 		writeU32(0); // some flags maybe, also looks unused
 		writeByte(ROOT_ATTR_VERSION); // version attribute
@@ -47,7 +47,7 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 		{
 			attrs = itemAttributes[item->id];
 
-			file.put(NODE_START);
+			file.put((const char) NODE_START);
 
 			// writing group byte
 			if (attrs && attrs->group)
@@ -105,14 +105,14 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 				writeU16(item->lightColor);
 			}
 
-			file.put(NODE_END);
+			file.put((const char) NODE_END);
 
 			if (file.bad()) return false;
 
 			progressUpdatable->updateProgress(++writings / (double) total);
 		}
 
-		file.put(NODE_END); // closing root node
+		file.put((const char) NODE_END); // closing root node
 
 		progressUpdatable->updateProgress(1);
 
@@ -124,7 +124,7 @@ bool ItemsOtbWriter::writeItemsOtb(shared_ptr <DatObjectList> items, const wxStr
 
 void ItemsOtbWriter::writeByte(unsigned char byte)
 {
-	if (byte == NODE_START || byte == NODE_END || byte == ESCAPE_CHAR) file.put(ESCAPE_CHAR);
+	if (byte == NODE_START || byte == NODE_END || byte == ESCAPE_CHAR) file.put((const char) ESCAPE_CHAR);
 	file.put(byte);
 }
 
