@@ -1,12 +1,11 @@
 For v1.0:
-- think of how to handle light color attribute properly
+- update 'Quick guide', describe 'blocking' states
 - undo / redo functions (attributes toggling, value attributes changes, object creation / deletion, sprites dragging / deletion, advanced attributes changes)
 - auto-backup
 - signature validation
 
 Minor bugs:
 - get rid of all memory leaks (detected in VS, particularly with JSON stuff)
-- solve incorrect layers blending on transparent areas
 - wheel-scrolling for objects listbox (works in Windows now, but doesn't work in Linux)
 
 Really future work:

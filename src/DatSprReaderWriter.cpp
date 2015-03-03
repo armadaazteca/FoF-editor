@@ -330,6 +330,35 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 	return true;
 }
 
+bool DatSprReaderWriter::readBlockingStates(const wxString & filename, ProgressUpdatable * progressUpdatable)
+{
+	file.open(filename.mb_str(), ios::in | ios::binary);
+	if (file.is_open())
+	{
+		readU32(); // skipping signature
+		unsigned int total = readU32();
+		unsigned int id = 0, readings = 0;
+		for (unsigned int i = 0; i < total; ++i)
+		{
+			id = readU32();
+			sprites->at(id)->isBlocking = true;
+
+			if (file.bad()) return false;
+
+			progressUpdatable->updateProgress(++readings / (double) total);
+		}
+
+		progressUpdatable->updateProgress(1);
+
+		file.close();
+	}
+	else
+	{
+		return false;
+	}
+	return true;
+}
+
 bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
 	file.open(filename.mb_str(), ios::in | ios::binary);
@@ -343,7 +372,7 @@ bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable 
 		for (unsigned int i = 0; i < spritesCount; ++i)
 		{
 			id = readU32();
-			sprite = (*sprites)[id];
+			sprite = sprites->at(id);
 			sprite->hasRealAlpha = true;
 			sprite->offsetAlpha = readU32();
 			currentOffset = file.tellg();
@@ -351,12 +380,18 @@ bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable 
 			file.read((char *) sprite->alpha.get(), Sprite::ALPHA_SIZE);
 			file.seekg(currentOffset);
 
+			if (file.bad()) return false;
+
 			progressUpdatable->updateProgress(++readings / (double) spritesCount);
 		}
 
 		progressUpdatable->updateProgress(1);
 
 		file.close();
+	}
+	else
+	{
+		return false;
 	}
 	return true;
 }
@@ -584,6 +619,44 @@ bool DatSprReaderWriter::writeSpr(const wxString & filename, ProgressUpdatable *
 	return true;
 }
 
+bool DatSprReaderWriter::writeBlockingStates(const wxString & filename, ProgressUpdatable * progressUpdatable)
+{
+	file.open(filename.mb_str(), ios::out | ios::binary | ios::trunc);
+	if (file.is_open())
+	{
+		writeU32(sprSignature);
+
+		vector <unsigned int> blockingSpriteIDs;
+		blockingSpriteIDs.reserve(100); // just for better perfomance
+		for (auto kv : *sprites)
+		{
+			if (kv.second->isBlocking) blockingSpriteIDs.push_back(kv.first);
+		}
+
+		// writing how much there are sprite IDs with 'blocking' state set to true
+		unsigned int total = blockingSpriteIDs.size();
+		writeU32(total);
+
+		// writing sprite IDs themselves
+		unsigned int writings = 0;
+		for (auto spriteID : blockingSpriteIDs)
+		{
+			writeU32(spriteID);
+			if (file.bad()) return false;
+			progressUpdatable->updateProgress(++writings / (double) total);
+		}
+
+		progressUpdatable->updateProgress(1);
+
+		file.close();
+	}
+	else
+	{
+		return false;
+	}
+	return true;
+}
+
 bool DatSprReaderWriter::writeAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
 	file.open(filename.mb_str(), ios::out | ios::binary | ios::trunc);
@@ -597,7 +670,7 @@ bool DatSprReaderWriter::writeAlpha(const wxString & filename, ProgressUpdatable
 		spritesWithAlpha.reserve(100); // just for better perfomance
 		for (unsigned int id = 1; id <= spritesCount; ++id)
 		{
-			sprite = (*sprites)[id];
+			sprite = sprites->at(id);
 			if (sprite->hasRealAlpha)
 			{
 				spritesWithAlpha.push_back(sprite);
@@ -627,7 +700,13 @@ bool DatSprReaderWriter::writeAlpha(const wxString & filename, ProgressUpdatable
 			progressUpdatable->updateProgress(++writings / (double) spritesCount);
 		}
 
+		progressUpdatable->updateProgress(1);
+
 		file.close();
+	}
+	else
+	{
+		return false;
 	}
 	return true;
 }

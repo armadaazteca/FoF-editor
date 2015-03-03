@@ -34,7 +34,7 @@ QuickGuideDialog::QuickGuideDialog(wxWindow * parent) : wxDialog(parent, wxID_AN
                            "You can drag & drop sprites from \"Object sprites\" / \"New sprites\" tabs to these grid cells. "
                            "Imported sprites, that are larger than 32x32 pixels, will be automatically layout into current grid.\n\n"
                            "Right-click on the sprite cell will bring popup menu, which will allow you to export this particular 32x32 sprite, "
-													 "stored in current cell, or export whole composed picture for object with width or height more than 1. "
+													 "stored in current cell, or export whole composed frame for object with width or height more than 1. "
 													 "Thus you can export whole multi-layer up to 4x4 size animation frame into one PNG file. This can be useful if "
 													 "you somehow lost original image, used for animation.\n\n"
 													 "You can also export or delete sprite by right-clicking it in \"Object sprites\" list.\n\n"

@@ -131,7 +131,7 @@ struct Sprite
 	unique_ptr <unsigned char[]> alpha = nullptr;
 	unsigned short compressedDataSize = 0;
 	unique_ptr <unsigned char[]> compressedData = nullptr;
-	bool isUsed = false;
+	bool isUsed = false, isBlocking = false;
 };
 
 struct AdvancedObjectAttributes

@@ -7,7 +7,8 @@ OBJECTS=obj/$(CONF)/NewEditor.o obj/$(CONF)/MainWindow.o obj/$(CONF)/DatSprOpenS
 				obj/$(CONF)/AdvancedAttributesManager.o obj/$(CONF)/ItemsOtbWriter.o obj/$(CONF)/XmlWriter.o \
         obj/$(CONF)/QuickGuideDialog.o obj/$(CONF)/Settings.o obj/$(CONF)/Events.o obj/$(CONF)/Config.o \
         obj/$(CONF)/Utils.o obj/$(CONF)/jsoncpp.o obj/$(CONF)/pugixml.o
-RESOURCES=bin/$(CONF)/res/icons/green_arrow_left.png bin/$(CONF)/res/icons/green_arrow_top_left.png
+RESOURCES=bin/$(CONF)/res/icons/green_arrow_left.png bin/$(CONF)/res/icons/green_arrow_top_left.png \
+          bin/$(CONF)/res/icons/blocking_mark.png
 
 all: bin/$(CONF)/NewEditor
 
@@ -82,6 +83,10 @@ bin/$(CONF)/res/icons/green_arrow_left.png: res/icons/green_arrow_left.png
 	cp $^ $@
 
 bin/$(CONF)/res/icons/green_arrow_top_left.png: res/icons/green_arrow_top_left.png
+	mkdir -p bin/$(CONF)/res/icons
+	cp $^ $@
+	
+bin/$(CONF)/res/icons/blocking_mark.png: res/icons/blocking_mark.png
 	mkdir -p bin/$(CONF)/res/icons
 	cp $^ $@
 

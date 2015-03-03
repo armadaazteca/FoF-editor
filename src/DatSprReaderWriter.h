@@ -23,9 +23,11 @@ public:
 	void initNewData();
 	bool readDat(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool readSpr(const wxString & filename, ProgressUpdatable * progressUpdatable);
+	bool readBlockingStates(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool readAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool writeDat(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool writeSpr(const wxString & filename, ProgressUpdatable * progressUpdatable);
+	bool writeBlockingStates(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool writeAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	shared_ptr <DatObjectList> getObjects(DatObjectCategory category);
 	inline shared_ptr <SpriteMap> getSprites() { return sprites; }
