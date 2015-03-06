@@ -19,6 +19,8 @@
 #include "AdvancedAttributesManager.h"
 #include "GenerateRMEDialog.h"
 #include "SpritesCleanupDialog.h"
+#include "PreferencesDialog.h"
+#include "AutoBackupDialog.h"
 #include "QuickGuideDialog.h"
 #include "AboutDialog.h"
 #include "DatSprReaderWriter.h"
@@ -39,6 +41,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_MENU(wxID_EXIT, MainWindow::OnExit)
 	EVT_MENU(wxID_UNDO, MainWindow::OnUndo)
 	EVT_MENU(wxID_REDO, MainWindow::OnRedo)
+	EVT_MENU(wxID_PREFERENCES, MainWindow::OnPreferencesDialog)
 	EVT_MENU(ID_MENU_EDIT_ADVANCED_ATTRS, MainWindow::OnAdvancedAttributesDialog)
 	EVT_MENU(ID_MENU_GENERATE_RME, MainWindow::OnGenerateRMEDialog)
 	EVT_MENU(ID_MENU_CLEANUP_SPRITES, MainWindow::OnSpritesCleanupDialog)
@@ -54,6 +57,8 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_COMMAND(wxID_ANY, RME_RES_GENERATED, MainWindow::OnRMEResourcesGenerated)
 	EVT_COMMAND(wxID_ANY, ADV_ATTRS_CHANGED, MainWindow::OnAdvancedAttributesChanged)
 	EVT_COMMAND(wxID_ANY, SPRITES_CLEANED_UP, MainWindow::OnSpritesCleanedUp)
+	EVT_COMMAND(wxID_ANY, PREFERENCES_SAVED, MainWindow::OnPreferencesSaved)
+	EVT_COMMAND(wxID_ANY, AUTOBACKUP_PROCESSED, MainWindow::OnAutobackupProcessed)
 	EVT_COMBOBOX(ID_CATEGORIES_COMBOBOX, MainWindow::OnObjectCategoryChanged)
 	EVT_LISTBOX(ID_OBJECTS_LISTBOX, MainWindow::OnObjectSelected)
 	EVT_SPINCTRL(ID_ANIM_WIDTH_INPUT, MainWindow::OnAnimWidthChanged)
@@ -81,6 +86,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_SPINCTRL(ID_PREVIEW_FPS_INPUT, MainWindow::OnPreviewFPSChanged)
 	EVT_BUTTON(ID_PREVIEW_ANIMATION_BUTTON, MainWindow::OnClickPreviewAnimationButton)
 	EVT_TIMER(ID_PREVIEW_TIMER, MainWindow::OnPreviewTimerEvent)
+	EVT_TIMER(ID_AUTO_BACKUP_TIMER, MainWindow::OnAutoBackupTimerEvent)
 	EVT_BUTTON(ID_NEW_OBJECT_BUTTON, MainWindow::OnClickNewObjectButton)
 	EVT_BUTTON(ID_DELETE_OBJECT_BUTTON, MainWindow::OnClickDeleteObjectButton)
 	EVT_BUTTON(ID_IMPORT_SPRITES_BUTTON, MainWindow::OnClickImportSpriteButton)
@@ -453,6 +459,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	midColumnGrid->Add(animationBox, 1, wxEXPAND);
 
 	previewTimer = unique_ptr <wxTimer> (new wxTimer(this, ID_PREVIEW_TIMER));
+	autoBackupTimer = unique_ptr <wxTimer> (new wxTimer(this, ID_AUTO_BACKUP_TIMER));
 
 	// boolean attributes
 	auto booleanAttrsBox = new wxStaticBoxSizer(wxVERTICAL, mainPanel, "Boolean attributes");
@@ -639,6 +646,23 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	animationPanel->Disable();
 	booleanAttrsPanel->Disable();
 	valueAttrsPanel->Disable();
+
+	// auto-backup setup
+	Settings & settings = Settings::getInstance();
+	wxString autoBackupEnabledValue = settings.get("autoBackupEnabled");
+	if (!autoBackupEnabledValue)
+	{
+		// enabling auto-backup by default
+		autoBackupEnabledValue = "yes";
+		settings.set("autoBackupEnabled", autoBackupEnabledValue);
+		settings.set("autoBackupInterval", "10"); // every 10 minutes
+		settings.save();
+	}
+	if (autoBackupEnabledValue.IsSameAs("yes"))
+	{
+		const wxString & autoBackupIntervalValue = settings.get("autoBackupInterval");
+		autoBackupTimer->Start(wxAtoi(autoBackupIntervalValue) * 60000);
+	}
 }
 
 void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
@@ -1098,7 +1122,8 @@ void MainWindow::OnToggleAttrCheckbox(wxCommandEvent & event)
 {
 	bool value = event.GetInt() != 0;
 	bool oldValue = changeBooleanAttribute(event.GetId(), value);
-	addOperationInfo(BOOLEAN_ATTR_TOGGLE, oldValue, value, event.GetId());
+	auto & opInfo = addOperationInfo(BOOLEAN_ATTR_TOGGLE, oldValue, value);
+	opInfo.controlID = event.GetId();
 	isDirty = true;
 }
 
@@ -1700,6 +1725,11 @@ void MainWindow::OnPreviewFPSChanged(wxSpinEvent & event)
 
 void MainWindow::OnClickPreviewAnimationButton(wxCommandEvent & event)
 {
+	// TODO: for testing
+	wxTimerEvent evt;
+	OnAutoBackupTimerEvent(evt);
+	return;
+
 	if (!isPreviewAnimationOn)
 	{
 		startAnimationPreview();
@@ -1708,7 +1738,6 @@ void MainWindow::OnClickPreviewAnimationButton(wxCommandEvent & event)
 	{
 		stopAnimationPreview();
 	}
-	
 }
 
 void MainWindow::startAnimationPreview()
@@ -1743,6 +1772,13 @@ void MainWindow::OnPreviewTimerEvent(wxTimerEvent & event)
 	currentFrame++;
 	if (currentFrame >= selectedObject->phasesCount) currentFrame = 0;
 	fillAnimationSprites();
+}
+
+void MainWindow::OnAutoBackupTimerEvent(wxTimerEvent & event)
+{
+	if (isPreviewAnimationOn) stopAnimationPreview();
+	AutoBackupDialog autoBackupDialog(this);
+	autoBackupDialog.ShowModal();
 }
 
 void MainWindow::OnClickNewObjectButton(wxCommandEvent & event)
@@ -1790,53 +1826,71 @@ void MainWindow::deleteSelectedObject()
 {
 	const wxString & msg = wxString::Format("Are you sure you want to delete object <%i> from \"%s\"?",
 		                                        selectedObject->id, CATEGORIES[currentCategory]);
-	auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(currentCategory);
 	if (selectedObject && wxMessageBox(msg, "Confirm delete", wxYES_NO | wxCANCEL) == wxYES)
 	{
-		if (isPreviewAnimationOn) stopAnimationPreview();
+		unsigned int id = selectedObject->id;
+		auto ret = processObjectDeletion(currentCategory, id);
+		deletedObjectsByCatAndId[currentCategory][id] = ret.first;
+		deletedAttrsByCatAndId[currentCategory][id] = ret.second;
 
-		auto objects = DatSprReaderWriter::getInstance().getObjects(currentCategory);
-		unsigned int id = selectedObject->id, index = id - (currentCategory == CategoryItem ? 100 : 1);
+		// putting currentCategory instead of newIntValue
+		addOperationInfo(OBJECT_DELETION, id, currentCategory);
 
-		// remapping advanced attributes first
-		unsigned int attrsID = id, endID = id + (objects->size() - index) - 1;
-		for (; attrsID < endID; ++attrsID)
-		{
-			attrs[attrsID] = attrs[attrsID + 1];
-		}
-		attrs.erase(attrs.find(attrsID));
-
-		// then erasing object itself
-		objects->erase(objects->begin() + index);
-		if (index < objects->size())
-		{
-			selectedObject = objects->at(index); // moving to next object
-			while (index < objects->size())
-			{
-				objects->at(index++)->id = id++; // reindexing IDs
-			}
-			index--;
-		}
-		else if (index > 0)
-		{
-			selectedObject = objects->at(--index); // moving to previous object
-		}
-		else
-		{
-			selectedObject = nullptr;
-			animationPanel->Disable();
-			booleanAttrsPanel->Disable();
-			valueAttrsPanel->Disable();
-		}
-
-		fillObjectsListBox(index);
-		setAttributeValues();
-		fillObjectSprites();
-		buildAnimationSpriteHolders();
-		fillAnimationSection();
+		statusBar->SetStatusText(wxString::Format("Deleted object <%i>", id));
 
 		isDirty = true;
 	}
+}
+
+pair <shared_ptr <DatObject>, shared_ptr <AdvancedObjectAttributes>>
+MainWindow::processObjectDeletion(DatObjectCategory category, unsigned int id)
+{
+	if (isPreviewAnimationOn) stopAnimationPreview();
+
+	auto objects = DatSprReaderWriter::getInstance().getObjects(category);
+	auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(category);
+	unsigned int index = id - (category == CategoryItem ? 100 : 1);
+
+	// remapping advanced attributes first
+	unsigned int attrsID = id, endID = id + (objects->size() - index) - 1;
+	auto deletedAttrs = attrs[attrsID];
+	attrs.erase(attrs.find(attrsID));
+	for (; attrsID < endID; ++attrsID)
+	{
+		attrs[attrsID] = attrs[attrsID + 1];
+	}
+
+	// then erasing object itself
+	auto deletedObject = objects->at(index);
+	objects->erase(objects->begin() + index);
+	if (index < objects->size())
+	{
+		selectedObject = objects->at(index); // moving to next object
+		while (index < objects->size())
+		{
+			objects->at(index++)->id = id++; // reindexing IDs
+		}
+		index--;
+	}
+	else if (index > 0)
+	{
+		selectedObject = objects->at(--index); // moving to previous object
+	}
+	else
+	{
+		selectedObject = nullptr;
+		animationPanel->Disable();
+		booleanAttrsPanel->Disable();
+		valueAttrsPanel->Disable();
+	}
+
+	fillObjectsListBox(index);
+	setAttributeValues();
+	fillObjectSprites();
+	buildAnimationSpriteHolders();
+	fillAnimationSection();
+
+	return pair <shared_ptr <DatObject>, shared_ptr <AdvancedObjectAttributes>> (deletedObject, deletedAttrs);
 }
 
 void MainWindow::OnClickImportSpriteButton(wxCommandEvent & event)
@@ -2021,7 +2075,8 @@ void MainWindow::OnToggleIsFullGroundAttr(wxCommandEvent & event)
 	selectedObject->allAttrs[AttrGround] = selectedObject->allAttrs[AttrFullGround] = value;
 	selectedObject->groundSpeed = value ? wxAtoi(groundSpeedInput->GetValue()) : 0;
 
-	addOperationInfo(FULL_GROUND_TOGGLE, oldValue, value, ID_ATTR_IS_FULL_GROUND);
+	auto & opInfo = addOperationInfo(FULL_GROUND_TOGGLE, oldValue, value);
+	opInfo.controlID = ID_ATTR_IS_FULL_GROUND;
 
 	isDirty = true;
 
@@ -2049,7 +2104,8 @@ void MainWindow::OnToggleHasLightAttr(wxCommandEvent & event)
 		selectedObject->lightColor = selectedObject->lightIntensity = 0;
 	}
 
-	addOperationInfo(HAS_LIGHT_TOGGLE, oldValue, value, ID_ATTR_HAS_LIGHT);
+	auto & opInfo = addOperationInfo(HAS_LIGHT_TOGGLE, oldValue, value);
+	opInfo.controlID = ID_ATTR_HAS_LIGHT;
 
 	isDirty = true;
 
@@ -2075,7 +2131,8 @@ void MainWindow::OnToggleHasOffsetAttr(wxCommandEvent & event)
 		selectedObject->displacementX = selectedObject->displacementY = 0;
 	}
 
-	addOperationInfo(HAS_OFFSET_TOGGLE, oldValue, value, ID_ATTR_HAS_OFFSET);
+	auto & opInfo = addOperationInfo(HAS_OFFSET_TOGGLE, oldValue, value);
+	opInfo.controlID = ID_ATTR_HAS_OFFSET;
 
 	isDirty = true;
 
@@ -2091,7 +2148,8 @@ void MainWindow::OnToggleHasElevationAttr(wxCommandEvent & event)
 	selectedObject->allAttrs[AttrElevation] = value;
 	selectedObject->elevation = value ? wxAtoi(elevationInput->GetValue()) : 0;
 
-	addOperationInfo(HAS_ELEVATION_TOGGLE, oldValue, value, ID_ATTR_HAS_ELEVATION);
+	auto & opInfo = addOperationInfo(HAS_ELEVATION_TOGGLE, oldValue, value);
+	opInfo.controlID = ID_ATTR_HAS_ELEVATION;
 
 	isDirty = true;
 
@@ -2143,14 +2201,16 @@ void MainWindow::OnOffsetXYChanged(wxCommandEvent & event)
 		if (id == ID_OFFSET_X_INPUT)
 		{
 			unsigned int val = wxAtoi(offsetXInput->GetValue());
-			addOperationInfo(OFFSET_XY_CHANGE, selectedObject->displacementX, val, ID_OFFSET_X_INPUT);
+			auto & opInfo = addOperationInfo(OFFSET_XY_CHANGE, selectedObject->displacementX, val);
+			opInfo.controlID = ID_OFFSET_X_INPUT;
 			selectedObject->displacementX = val;
 			statusBar->SetStatusText(wxString::Format("Object \"Offset X\" value changed to %i", selectedObject->displacementX));
 		}
 		else if (id == ID_OFFSET_Y_INPUT)
 		{
 			unsigned int val = wxAtoi(offsetYInput->GetValue());
-			addOperationInfo(OFFSET_XY_CHANGE, selectedObject->displacementY, val, ID_OFFSET_Y_INPUT);
+			auto & opInfo = addOperationInfo(OFFSET_XY_CHANGE, selectedObject->displacementY, val);
+			opInfo.controlID = ID_OFFSET_Y_INPUT;
 			selectedObject->displacementY = val;
 			statusBar->SetStatusText(wxString::Format("Object \"Offset Y\" value changed to %i", selectedObject->displacementY));
 		}
@@ -2243,7 +2303,10 @@ void MainWindow::OnAdvancedAttributesDialog(wxCommandEvent & event)
 		if (selectedObject)
 		{
 			if (isPreviewAnimationOn) stopAnimationPreview();
-			AdvancedAttributesDialog dialog(this, currentCategory, selectedObject->id);
+			unsigned int id = selectedObject->id;
+			auto & aam = AdvancedAttributesManager::getInstance();
+			savedAttrsByCatAndId[currentCategory][id] = aam.getAttributes(currentCategory, id);
+			AdvancedAttributesDialog dialog(this, currentCategory, id);
 			dialog.ShowModal();
 		}
 		else
@@ -2262,6 +2325,15 @@ void MainWindow::OnAdvancedAttributesChanged(wxCommandEvent & event)
 {
 	isDirty = true;
 	const wchar_t * msg = wxT("Advanced attributes of the object <%i> have been modified");
+
+	unsigned int id = selectedObject->id;
+	auto & aam = AdvancedAttributesManager::getInstance();
+	changedAttrsByCatAndId[currentCategory][id] = aam.getAttributes(currentCategory, id);
+	// putting currentCategory instead of newIntValue
+	addOperationInfo(ADVANCED_ATTRS_CHANGE, id, currentCategory);
+
+	isDirty = true;
+
 	statusBar->SetStatusText(wxString::Format(msg, selectedObject->id));
 }
 
@@ -2299,18 +2371,32 @@ void MainWindow::OnSpritesCleanedUp(wxCommandEvent & event)
 	statusBar->SetStatusText("Cleaned-up some sprites. Don't forget to save.");
 }
 
+void MainWindow::OnPreferencesSaved(wxCommandEvent & event)
+{
+	Settings & settings = Settings::getInstance();
+	const wxString & autoBackupEnabledValue = settings.get("autoBackupEnabled");
+	const wxString & autoBackupIntervalValue = settings.get("autoBackupInterval");
+	if (autoBackupEnabledValue.IsSameAs("yes"))
+	{
+		autoBackupTimer->Stop();
+		autoBackupTimer->Start(wxAtoi(autoBackupIntervalValue) * 60000);
+	}
+
+	statusBar->SetStatusText("Preferences saved");
+}
+
 void MainWindow::OnQuickGuide(wxCommandEvent & event)
 {
 	if (isPreviewAnimationOn) stopAnimationPreview();
-	auto quickGuideDialog = new QuickGuideDialog(this);
-	quickGuideDialog->ShowModal();
+	QuickGuideDialog quickGuideDialog(this);
+	quickGuideDialog.ShowModal();
 }
 
 void MainWindow::OnAbout(wxCommandEvent & event)
 {
 	if (isPreviewAnimationOn) stopAnimationPreview();
-	auto aboutDialog = new AboutDialog(this);
-	aboutDialog->ShowModal();
+	AboutDialog aboutDialog(this);
+	aboutDialog.ShowModal();
 }
 
 void MainWindow::OnExportSpriteMenu(wxCommandEvent & event)
@@ -2409,18 +2495,33 @@ void MainWindow::OnExportComposedFrameMenu(wxCommandEvent & event)
 void MainWindow::OnDeleteSpriteMenu(wxCommandEvent & event)
 {
 	contextMenuTargetBitmap->SetBitmap(emptyBitmap);
+	unsigned int spriteIndex = 0, oldSpriteID = 0;
 	if (contextMenuTargetBitmap->GetId() == ID_ANIM_GRID_BITMAP)
 	{
-		selectedObject->spriteIDs[getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap)] = 0;
+		spriteIndex = getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap);
+		oldSpriteID = selectedObject->spriteIDs[spriteIndex];
+		selectedObject->spriteIDs[spriteIndex] = 0;
+
 	}
 	else if (contextMenuTargetBitmap->GetId() == ID_OBJ_SPRITES_GSB)
 	{
 		auto esi = reinterpret_cast <EditorSpriteIDs *> (contextMenuTargetBitmap->GetClientData());
-		selectedObject->spriteIDs[esi->getObjectSpriteIndex()] = 0;
+		spriteIndex = esi->getObjectSpriteIndex();
+		oldSpriteID = selectedObject->spriteIDs[spriteIndex];
+		selectedObject->spriteIDs[spriteIndex] = 0;
 		fillAnimationSprites();
 	}
-	
+
 	fillObjectSprites();
+
+	auto & opInfo = addOperationInfo(ANIM_SPRITE_CHANGE, oldSpriteID, 0);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
+	opInfo.spriteID = spriteIndex; // saving spriteIndex as spriteID
+
+	statusBar->SetStatusText(wxString::Format("Deleted sprite <%i> from animation", oldSpriteID));
+
+	isDirty = true;
 }
 
 void MainWindow::OnToggleSpriteBlockingMenu(wxCommandEvent & event)
@@ -2437,6 +2538,7 @@ void MainWindow::OnToggleSpriteBlockingMenu(wxCommandEvent & event)
 			// if we have several layers, we need to go through them and update each sprite 'blocking' state
 			// which are on the same position in the grid
 			unsigned int curLayer = currentLayer;
+			bool first = true;
 			for (currentLayer = 0; currentLayer < selectedObject->layersCount; ++currentLayer)
 			{
 				spriteIdIndex = getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap);
@@ -2444,22 +2546,39 @@ void MainWindow::OnToggleSpriteBlockingMenu(wxCommandEvent & event)
 				if (spriteID && sprites->find(spriteID) != sprites->end())
 				{
 					sprite = sprites->at(spriteID);
+
+					auto & opInfo = addOperationInfo(SPRITE_BLOCKING_CHANGE, sprite->isBlocking, newBlockingValue, !first);
+					opInfo.categoryID = currentCategory;
+					opInfo.objectID = selectedObject->id;
+					opInfo.spriteID = spriteID;
+
 					sprite->isBlocking = newBlockingValue;
+
+					first = false;
 				}
 			}
 			currentLayer = curLayer;
 		}
 		else
 		{
+			auto & opInfo = addOperationInfo(SPRITE_BLOCKING_CHANGE, sprite->isBlocking, newBlockingValue);
+			opInfo.categoryID = currentCategory;
+			opInfo.objectID = selectedObject->id;
+			opInfo.spriteID = spriteID;
 			sprite->isBlocking = newBlockingValue;
 		}
 	}
 
 	fillAnimationSprites();
+
+	statusBar->SetStatusText(wxString::Format("Changed 'blocking' state of sprite <%i>", spriteID));
+
+	isDirty = true;
 }
 
 void MainWindow::OnToggleSpriteBlockingAllFramesMenu(wxCommandEvent & event)
 {
+	// TODO
 	auto sprites = DatSprReaderWriter::getInstance().getSprites();
 }
 
@@ -2478,32 +2597,40 @@ unsigned int MainWindow::getSpriteIdIndexOfAnimGridBitmap(wxGenericStaticBitmap 
 	return spriteIdIndex;
 }
 
-void MainWindow::addOperationInfo(OperationID operationID, int oldValue, int newValue, int controlID, bool chained)
+MainWindow::OperationInfo & MainWindow::addOperationInfo(OperationID operationID, int oldValue, int newValue, bool chained)
 {
 	OperationInfo info;
 	info.operationID = operationID;
 	info.oldIntValue = oldValue;
 	info.newIntValue = newValue;
-	info.chained = chained;
-	info.controlID = controlID;
+	info.chainedUndo = chained;
+	if (chained)
+	{
+		undoStack.top().chainedRedo = true;
+	}
 	undoStack.push(info);
 	redoStack = stack <OperationInfo> (); // clearing redos
 	menuEdit->FindChildItem(wxID_UNDO)->Enable();
 	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	return undoStack.top();
 }
 
-void MainWindow::addOperationInfo(OperationID operationID, wxString oldValue, wxString newValue, int controlID, bool chained)
+MainWindow::OperationInfo & MainWindow::addOperationInfo(OperationID operationID, wxString oldValue, wxString newValue, bool chained)
 {
 	OperationInfo info;
 	info.operationID = operationID;
 	info.oldStrValue = oldValue;
 	info.newStrValue = newValue;
-	info.chained = chained;
-	info.controlID = controlID;
+	info.chainedUndo = chained;
+	if (chained)
+	{
+		undoStack.top().chainedRedo = true;
+	}
 	undoStack.push(info);
 	redoStack = stack <OperationInfo> (); // clearing redos
 	menuEdit->FindChildItem(wxID_UNDO)->Enable();
 	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	return undoStack.top();
 }
 
 void MainWindow::OnUndo(wxCommandEvent & event)
@@ -2728,17 +2855,122 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		}
 		break;
 
+		case OBJECT_DELETION:
+		{
+			if (isPreviewAnimationOn) stopAnimationPreview();
+
+			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
+			auto objects = DatSprReaderWriter::getInstance().getObjects(category);
+			auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(category);
+			unsigned int id = info.oldIntValue;
+			unsigned int index = id - (category == CategoryItem ? 100 : 1);
+
+			// remapping advanced attributes first
+			unsigned int attrsID = id, endID = id + (objects->size() - index) + 1;
+			for (unsigned int aid = endID; aid > attrsID; --aid)
+			{
+				attrs[aid] = attrs[aid - 1];
+			}
+			attrs[attrsID] = deletedAttrsByCatAndId[category][attrsID];
+
+			// then inserting deleted object back
+			objects->insert(objects->begin() + index, deletedObjectsByCatAndId[category][id]);
+			unsigned int idx = index;
+			while (idx < objects->size())
+			{
+				objects->at(idx++)->id = id++; // reindexing IDs
+			}
+
+			// selecting restored object if we're still in same category
+			if (category == currentCategory)
+			{
+				selectedObject = objects->at(index);
+
+				animationPanel->Enable();
+				booleanAttrsPanel->Enable();
+				valueAttrsPanel->Enable();
+
+				fillObjectsListBox(index);
+				setAttributeValues();
+				fillObjectSprites();
+				buildAnimationSpriteHolders();
+				fillAnimationSection();
+			}
+
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "object deletion"));
+		}
+		break;
+
+		case ADVANCED_ATTRS_CHANGE:
+		{
+			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
+			unsigned int id = info.oldIntValue;
+			AdvancedAttributesManager::getInstance().setAttributes(category, id, savedAttrsByCatAndId[category][id]);
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "advanced attributes modification"));
+		}
+		break;
+
+		case SPRITE_INSERTION:
+		{
+			auto sprites = DatSprReaderWriter::getInstance().getSprites();
+			deletedSprites[info.newIntValue] = addedSprites[info.newIntValue];
+			sprites->erase(sprites->find(addedSprites[info.newIntValue]->id));
+
+			DatObjectCategory category = (DatObjectCategory) info.categoryID;
+			unsigned int id = info.objectID;
+			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			{
+				fillObjectSprites();
+				fillAnimationSprites();
+			}
+
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "sprite insertion"));
+		}
+		break;
+
+		case ANIM_SPRITE_CHANGE:
+		{
+			DatObjectCategory category = (DatObjectCategory) info.categoryID;
+			auto objects = DatSprReaderWriter::getInstance().getObjects(category);
+			unsigned int id = info.objectID;
+			unsigned int index = id - (info.categoryID == CategoryItem ? 100 : 1);
+			auto obj = objects->at(index);
+			obj->spriteIDs[info.spriteID] = info.oldIntValue;
+			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			{
+				fillObjectSprites();
+				fillAnimationSprites();
+			}
+
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "animation sprite change"));
+		}
+		break;
+
+		case SPRITE_BLOCKING_CHANGE:
+		{
+			DatSprReaderWriter::getInstance().getSprites()->at(info.spriteID)->isBlocking = info.oldIntValue != 0;
+			if ((unsigned int) info.objectID == selectedObject->id)
+			{
+				fillAnimationSprites();
+			}
+		}
+		break;
+
 		default:
 		break;
 	}
 
 	undoStack.pop();
+	redoStack.push(info);
+	menuEdit->FindChildItem(wxID_REDO)->Enable();
 	if (undoStack.empty())
 	{
 		menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
 	}
-	redoStack.push(info);
-	menuEdit->FindChildItem(wxID_REDO)->Enable();
+	else if (info.chainedUndo)
+	{
+		OnUndo(event);
+	}
 }
 
 void MainWindow::OnRedo(wxCommandEvent & event)
@@ -2963,17 +3195,96 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		}
 		break;
 
+		case OBJECT_DELETION:
+		{
+			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
+			unsigned int id = info.oldIntValue;
+			processObjectDeletion(category, id);
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "object deletion"));
+		}
+		break;
+
+		case ADVANCED_ATTRS_CHANGE:
+		{
+			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
+			unsigned int id = info.oldIntValue;
+			AdvancedAttributesManager::getInstance().setAttributes(category, id, changedAttrsByCatAndId[category][id]);
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "advanced attributes modification"));
+		}
+		break;
+
+		case SPRITE_INSERTION:
+		{
+			auto sprites = DatSprReaderWriter::getInstance().getSprites();
+			(*sprites)[info.newIntValue] = deletedSprites[info.newIntValue];
+
+			DatObjectCategory category = (DatObjectCategory) info.categoryID;
+			unsigned int id = info.objectID;
+			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			{
+				fillObjectSprites();
+				fillAnimationSprites();
+			}
+
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "sprite insertion"));
+		}
+		break;
+
+		case ANIM_SPRITE_CHANGE:
+		{
+			DatObjectCategory category = (DatObjectCategory) info.categoryID;
+			auto objects = DatSprReaderWriter::getInstance().getObjects(category);
+			unsigned int id = info.objectID;
+			unsigned int index = id - (info.categoryID == CategoryItem ? 100 : 1);
+			auto obj = objects->at(index);
+			obj->spriteIDs[info.spriteID] = info.newIntValue;
+			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			{
+				fillObjectSprites();
+				fillAnimationSprites();
+			}
+
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "animation sprite change"));
+		}
+		break;
+
+		case SPRITE_BLOCKING_CHANGE:
+		{
+			DatSprReaderWriter::getInstance().getSprites()->at(info.spriteID)->isBlocking = info.newIntValue != 0;
+			if ((unsigned int) info.objectID == selectedObject->id)
+			{
+				fillAnimationSprites();
+			}
+		}
+		break;
+
 		default:
 		break;
 	}
 
 	redoStack.pop();
+	undoStack.push(info);
+	menuEdit->FindChildItem(wxID_UNDO)->Enable();
 	if (redoStack.empty())
 	{
 		menuEdit->FindChildItem(wxID_REDO)->Enable(false);
 	}
-	undoStack.push(info);
-	menuEdit->FindChildItem(wxID_UNDO)->Enable();
+	else if (info.chainedRedo)
+	{
+		OnRedo(event);
+	}
+}
+
+void MainWindow::OnPreferencesDialog(wxCommandEvent & event)
+{
+	if (isPreviewAnimationOn) stopAnimationPreview();
+	PreferencesDialog preferencesDialog(this);
+	preferencesDialog.ShowModal();
+}
+
+void MainWindow::OnAutobackupProcessed(wxCommandEvent & event)
+{
+	statusBar->SetStatusText("Performed auto-backup");
 }
 
 MainWindow::~MainWindow()
@@ -3026,6 +3337,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 		esi->setType(MainWindow::EditorSpriteIDs::EXISTING);
 		esi->setBigSpriteSize(width, height);
 		esiSpriteIDs.clear();
+		bool first = true;
 		for (int h = 0; h < height; ++h)
 		{
 			for (int w = 0; w < width; ++w)
@@ -3088,10 +3400,21 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 				unsigned int spriteIndex = spriteIdStartIndex - h * obj->width - w;
 				if (spriteIndex >= 0 && spriteIndex < obj->spriteCount)
 				{
+					unsigned int oldSpriteID = obj->spriteIDs[spriteIndex];
 					obj->spriteIDs[spriteIndex] = sprite->id;
+					auto & opInfo = mainWindow->addOperationInfo(ANIM_SPRITE_CHANGE, oldSpriteID, sprite->id, !first);
+					opInfo.categoryID = mainWindow->currentCategory;
+					opInfo.objectID = obj->id;
+					opInfo.spriteID = spriteIndex; // saving spriteIndex as spriteID
 				}
+				mainWindow->addedSprites[sprite->id] = sprite;
+				auto & opInfo = mainWindow->addOperationInfo(SPRITE_INSERTION, 0, sprite->id, true);
+				opInfo.categoryID = mainWindow->currentCategory;
+				opInfo.objectID = obj->id;
 
 				esiSpriteIDs.push_back(sprite->id);
+
+				first = false;
 			}
 		}
 
@@ -3116,6 +3439,7 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 		auto esiSpriteIDs = esi->getSpriteIDs();
 		unsigned int spriteID = 0;
 		int width = esi->getBigSpriteWidth(), height = esi->getBigSpriteHeight();
+		bool first = true;
 		for (int h = 0; h < height; ++h)
 		{
 			for (int w = 0; w < width; ++w)
@@ -3123,7 +3447,16 @@ bool MainWindow::AnimationSpriteDropTarget::OnDropText(wxCoord x, wxCoord y, con
 				unsigned int spriteIndex = spriteIdStartIndex - h * obj->width - w;
 				if (spriteIndex >= 0 && spriteIndex < obj->spriteCount)
 				{
-					obj->spriteIDs[spriteIndex] = esiSpriteIDs[spriteID++];
+					unsigned int oldSpriteID = obj->spriteIDs[spriteIndex];
+					obj->spriteIDs[spriteIndex] = esiSpriteIDs[spriteID];
+
+					auto & opInfo = mainWindow->addOperationInfo(ANIM_SPRITE_CHANGE, oldSpriteID, spriteID, !first);
+					opInfo.categoryID = mainWindow->currentCategory;
+					opInfo.objectID = obj->id;
+					opInfo.spriteID = spriteIndex; // saving spriteIndex as spriteID
+
+					first = false;
+					spriteID++;
 				}
 			}
 		}

@@ -1,8 +1,8 @@
 For v1.0:
 - update 'Quick guide', describe 'blocking' states
-- undo / redo functions (attributes toggling, value attributes changes, object creation / deletion, sprites dragging / deletion, advanced attributes changes)
-- auto-backup
 - signature validation
+- implement 'blocking' sprites toggle for all frames on animation
+- verify current object for all undo / redo operations
 
 Minor bugs:
 - get rid of all memory leaks (detected in VS, particularly with JSON stuff)

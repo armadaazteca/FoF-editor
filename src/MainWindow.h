@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <stack>
+#include <map>
 #include <wx/generic/statbmpg.h>
 #include <wx/dnd.h>
 #include <wx/clrpicker.h>
@@ -95,6 +96,7 @@ private:
 		ID_PREVIEW_ANIMATION_BUTTON,
 		ID_DRAW_BLOCKING_MARKS_CHECKBOX,
 		ID_PREVIEW_TIMER,
+		ID_AUTO_BACKUP_TIMER,
 		ID_PREVIEW_FPS_INPUT,
 		ID_NEW_OBJECT_BUTTON,
 		ID_DELETE_OBJECT_BUTTON,
@@ -151,7 +153,8 @@ private:
 		LAYERS_COUNT_CHANGE, AMOUNT_OF_FRAMES_CHANGE, ALWAYS_ANIMATED_TOGGLE, BOOLEAN_ATTR_TOGGLE,
 		FULL_GROUND_TOGGLE, GROUND_SPEED_CHANGE, HAS_LIGHT_TOGGLE, LIGHT_COLOR_CHANGE, LIGHT_INTENSITY_CHANGE,
 		HAS_OFFSET_TOGGLE, OFFSET_XY_CHANGE, HAS_ELEVATION_TOGGLE, ELEVATION_CHANGE,
-		OPERATION_NONE
+		OBJECT_DELETION, OBJECT_CREATION, ADVANCED_ATTRS_CHANGE, SPRITE_INSERTION, SPRITE_BLOCKING_CHANGE,
+		ANIM_SPRITE_CHANGE, OPERATION_NONE
 	};
 
 	struct OperationInfo
@@ -159,8 +162,8 @@ private:
 		OperationID operationID = OPERATION_NONE;
 		int oldIntValue = 0, newIntValue = 0;
 		wxString oldStrValue, newStrValue;
-		bool chained = false; // whether this operation chained with other undos to rollback several at once
-		int controlID = 0; // optional control ID or index in controls array
+		bool chainedUndo = false, chainedRedo = false; // whether this operation chained with other undos to rollback several at once
+		int controlID = 0, categoryID = 0, objectID = 0, spriteID = 0; // various related IDs
 	};
 
 	bool isDirty = false; // whether editor data has been modified
@@ -195,7 +198,7 @@ private:
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr, * blendLayersCheckbox = nullptr;
 	wxSpinCtrl * previewFpsInput = nullptr;
 	wxCheckBox * drawBlockingMarksCheckbox = nullptr;
-	unique_ptr <wxTimer> previewTimer = nullptr;
+	unique_ptr <wxTimer> previewTimer = nullptr, autoBackupTimer = nullptr;
 	wxStaticText * groundSpeedLabel = nullptr, * lightColorLabel = nullptr, * lightIntensityLabel = nullptr;
 	wxStaticText * offsetXLabel = nullptr, * offsetYLabel = nullptr, * elevationLabel = nullptr;
 	wxTextCtrl * groundSpeedInput = nullptr, * lightIntensityInput = nullptr;
@@ -217,6 +220,11 @@ private:
 	vector <EditorSpriteIDs *> editorSpriteIDs;
 	vector <wxWindow *> controlsToDisableOnPreview;
 	stack <OperationInfo> undoStack, redoStack;
+	map <DatObjectCategory, map <unsigned int, shared_ptr <DatObject>>> deletedObjectsByCatAndId;
+	map <DatObjectCategory, map <unsigned int, shared_ptr <AdvancedObjectAttributes>>> deletedAttrsByCatAndId;
+	map <DatObjectCategory, map <unsigned int, shared_ptr <AdvancedObjectAttributes>>>
+	savedAttrsByCatAndId, changedAttrsByCatAndId;
+	map <unsigned int, shared_ptr <Sprite>> addedSprites, deletedSprites;
 
 	void OnCreateNewFiles(wxCommandEvent & event);
 	void OnOpenDatSprDialog(wxCommandEvent & event);
@@ -243,6 +251,7 @@ private:
 	void OnPreviewFPSChanged(wxSpinEvent & event);
 	void OnClickPreviewAnimationButton(wxCommandEvent & event);
 	void OnPreviewTimerEvent(wxTimerEvent & event);
+	void OnAutoBackupTimerEvent(wxTimerEvent & event);
 	void OnClickNewObjectButton(wxCommandEvent & event);
 	void OnClickDeleteObjectButton(wxCommandEvent & event);
 	void OnClickImportSpriteButton(wxCommandEvent & event);
@@ -265,6 +274,8 @@ private:
 	void OnClose(wxCloseEvent & event);
 	void OnUndo(wxCommandEvent & event);
 	void OnRedo(wxCommandEvent & event);
+	void OnPreferencesDialog(wxCommandEvent & event);
+	void OnPreferencesSaved(wxCommandEvent & event);
 	void OnAdvancedAttributesDialog(wxCommandEvent & event);
 	void OnAdvancedAttributesChanged(wxCommandEvent & event);
 	void OnGenerateRMEDialog(wxCommandEvent & event);
@@ -278,6 +289,7 @@ private:
 	void OnDeleteSpriteMenu(wxCommandEvent & event);
 	void OnToggleSpriteBlockingMenu(wxCommandEvent & event);
 	void OnToggleSpriteBlockingAllFramesMenu(wxCommandEvent & event);
+	void OnAutobackupProcessed(wxCommandEvent & event);
 	unsigned int getSpriteIdIndexOfAnimGridBitmap(wxGenericStaticBitmap * animGridBitmap);
 	bool checkDirty();
 	void fillObjectsListBox(unsigned int selectedIndex = 0);
@@ -299,10 +311,12 @@ private:
 	void clearAnimationSpriteSelection(wxGenericStaticBitmap * animGridBitmap);
 	void resizeObjectSpriteIDsArray(shared_ptr <DatObject> object);
 	void deleteSelectedObject();
+	pair <shared_ptr <DatObject>, shared_ptr <AdvancedObjectAttributes>>
+	processObjectDeletion(DatObjectCategory category, unsigned int id);
 	void startAnimationPreview();
 	void stopAnimationPreview();
-	void addOperationInfo(OperationID operationID, int oldValue, int newValue, int controlID = -1, bool chained = false);
-	void addOperationInfo(OperationID operationID, wxString oldValue, wxString newValue, int controlID = -1, bool chained = false);
+	OperationInfo & addOperationInfo(OperationID operationID, int oldValue, int newValue, bool chained = false);
+	OperationInfo & addOperationInfo(OperationID operationID, wxString oldValue, wxString newValue, bool chained = false);
 
 	wxDECLARE_EVENT_TABLE();
 

@@ -9,7 +9,7 @@ public:
 	static const wxString & APP_NAME;
 	static const int MAJOR_VERSION = 0;
 	static const int MINOR_VERSION = 9;
-	static const int BUILD_VERSION = 4;
+	static const int BUILD_VERSION = 8;
 	static const wxString & VERSION_STRING;
 	static const int SPRITE_SIZE = 32;
 	static const int MAIN_WINDOW_WIDTH = 1280;
@@ -28,6 +28,7 @@ public:
 	static const int MAX_UNDO_RECORDS = 100;
 	static const int BLOCKING_MARK_X = 21;
 	static const int BLOCKING_MARK_Y = 2;
+	static const int MAX_AUTOBACKUP_INTERVAL = 60;
 };
 
 #endif // _CONFIG_H_

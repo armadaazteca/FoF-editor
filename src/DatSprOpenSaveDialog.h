@@ -12,7 +12,7 @@ public:
 	const static wxString DEFAULT_FILENAME;
 
 	DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode);
-	void updateProgress(double value);
+	virtual void updateProgress(double value);
 	inline virtual ~DatSprOpenSaveDialog() {};
 private:
 	enum ControlIDs
