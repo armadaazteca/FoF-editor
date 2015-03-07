@@ -257,7 +257,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	unsigned char emptyBitmapRGB[Sprite::RGB_SIZE];
 	unsigned char emptyBitmapAlpha[Sprite::ALPHA_SIZE];
 	memset(emptyBitmapRGB, 0, Sprite::RGB_SIZE);
-	memset(emptyBitmapAlpha, 0, Sprite::RGB_SIZE);
+	memset(emptyBitmapAlpha, 0, Sprite::ALPHA_SIZE);
 	wxImage emptyImage(32, 32, emptyBitmapRGB, emptyBitmapAlpha, true);
 	emptyBitmap = wxBitmap(emptyImage);
 
@@ -621,21 +621,28 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 
 	// 'blocking' mark icon; loading it and converting into byte arrays
 	blockingMarkImage.LoadFile("res/icons/blocking_mark.png", wxBITMAP_TYPE_PNG);
-	//wxLogDebug("Has alpha: %s", blockingMarkImage.HasAlpha() ? "yes" : "no");
+	if (!blockingMarkImage.HasAlpha()) blockingMarkImage.InitAlpha();
 	wxBitmap bmiBmp(blockingMarkImage);
 	wxAlphaPixelData apd(bmiBmp);
 	auto it = apd.GetPixels();
-	auto pdlen = blockingMarkImage.GetWidth() * blockingMarkImage.GetHeight();
+	int bmiW = blockingMarkImage.GetWidth(), bmiX = 0, bmiY = 0;
+	auto pdlen = bmiW * blockingMarkImage.GetHeight();
 	blockingMarkRGB = unique_ptr <unsigned char[]> (new unsigned char[pdlen * 3]);
 	blockingMarkAlpha = unique_ptr <unsigned char[]> (new unsigned char[pdlen]);
 	auto bmiRGB = blockingMarkRGB.get(), bmiAlpha = blockingMarkAlpha.get();
 	for (int i = 0, j = 0; j < pdlen; i += 3, ++j)
 	{
+		it.MoveTo(apd, bmiX, bmiY);
 		bmiRGB[i] = it.Red();
 		bmiRGB[i + 1] = it.Green();
 		bmiRGB[i + 2] = it.Blue();
 		bmiAlpha[j] = it.Alpha();
-		++it;
+		++bmiX;
+		if (bmiX >= bmiW)
+		{
+			bmiX = 0;
+			++bmiY;
+		}
 	}
 
 	// variables
@@ -1725,11 +1732,6 @@ void MainWindow::OnPreviewFPSChanged(wxSpinEvent & event)
 
 void MainWindow::OnClickPreviewAnimationButton(wxCommandEvent & event)
 {
-	// TODO: for testing
-	wxTimerEvent evt;
-	OnAutoBackupTimerEvent(evt);
-	return;
-
 	if (!isPreviewAnimationOn)
 	{
 		startAnimationPreview();

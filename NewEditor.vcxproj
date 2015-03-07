@@ -14,6 +14,7 @@
     <ClInclude Include="src\AboutDialog.h" />
     <ClInclude Include="src\AdvancedAttributesDialog.h" />
     <ClInclude Include="src\AdvancedAttributesManager.h" />
+    <ClInclude Include="src\AutoBackupDialog.h" />
     <ClInclude Include="src\Config.h" />
     <ClInclude Include="src\DatSprOpenSaveDialog.h" />
     <ClInclude Include="src\DatSprReaderWriter.h" />
@@ -25,6 +26,7 @@
     <ClInclude Include="src\jsoncpp\json.h" />
     <ClInclude Include="src\MainWindow.h" />
     <ClInclude Include="src\NewEditor.h" />
+    <ClInclude Include="src\PreferencesDialog.h" />
     <ClInclude Include="src\pugixml\pugixml.hpp" />
     <ClInclude Include="src\QuickGuideDialog.h" />
     <ClInclude Include="src\Settings.h" />
@@ -36,6 +38,7 @@
     <ClCompile Include="src\AboutDialog.cpp" />
     <ClCompile Include="src\AdvancedAttributesDialog.cpp" />
     <ClCompile Include="src\AdvancedAttributesManager.cpp" />
+    <ClCompile Include="src\AutoBackupDialog.cpp" />
     <ClCompile Include="src\Config.cpp" />
     <ClCompile Include="src\DatSprOpenSaveDialog.cpp" />
     <ClCompile Include="src\DatSprReaderWriter.cpp" />
@@ -45,6 +48,7 @@
     <ClCompile Include="src\jsoncpp\jsoncpp.cpp" />
     <ClCompile Include="src\MainWindow.cpp" />
     <ClCompile Include="src\NewEditor.cpp" />
+    <ClCompile Include="src\PreferencesDialog.cpp" />
     <ClCompile Include="src\pugixml\pugixml.cpp" />
     <ClCompile Include="src\QuickGuideDialog.cpp" />
     <ClCompile Include="src\Settings.cpp" />

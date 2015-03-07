@@ -1,9 +1,9 @@
 #include <wx/wxprec.h>
 #ifndef WX_PRECOMP
 #include <wx/wx.h>
+#endif
 #include <wx/gbsizer.h>
 #include <wx/spinctrl.h>
-#endif
 #include "Config.h"
 #include "Events.h"
 #include "Settings.h"
