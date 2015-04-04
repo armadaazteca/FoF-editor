@@ -13,6 +13,12 @@ using namespace std;
 class DatSprReaderWriter
 {
 public:
+	enum Error
+	{
+		ERROR_INVALID_SIGNATURE,
+		ERROR_UNKNOWN
+	};
+
 	const static unsigned int DEFAULT_DAT_SIGNATURE = 0x4FFA74CC; // signatures for
 	const static unsigned int DEFAULT_SPR_SIGNATURE = 0x4FFA74F9; // Tibia 9.60 format
 	const static unsigned int ITEM_FIRST_ID = 100;
@@ -34,6 +40,7 @@ public:
 	inline void setSprites(shared_ptr <SpriteMap> sprites) { this->sprites = sprites; }
 	inline unsigned int getMaxSpriteId() { return maxSpriteId; }
 	inline unsigned int incrementMaxSpriteId() { return maxSpriteId++; } // return first, then increment
+	inline Error getLastError() { return lastError; }
 
 private:
 	DatSprReaderWriter() {}
@@ -55,6 +62,7 @@ private:
 	shared_ptr <DatObjectList> items = nullptr, creatures = nullptr, effects = nullptr, projectiles = nullptr;
 	shared_ptr <SpriteMap> sprites = nullptr;
 	unsigned int maxSpriteId = 0;
+	Error lastError = ERROR_UNKNOWN;
 };
 
 #endif // _DAT_SPR_READER_WRITER_H_

@@ -10,6 +10,7 @@
 #include <wx/rawbmp.h>
 #include <wx/valnum.h>
 #include <wx/dcgraph.h>
+#include <Magick++.h>
 #include "Events.h"
 #include "Utils.h"
 #include "Settings.h"
@@ -19,11 +20,14 @@
 #include "AdvancedAttributesManager.h"
 #include "GenerateRMEDialog.h"
 #include "SpritesCleanupDialog.h"
+#include "ExportAnimationDialog.h"
 #include "PreferencesDialog.h"
 #include "AutoBackupDialog.h"
 #include "QuickGuideDialog.h"
 #include "AboutDialog.h"
 #include "DatSprReaderWriter.h"
+
+using namespace Magick;
 
 const wxString & MainWindow::DIRECTION_QUESTION = "This object doesn't have \"%s\" direction yet, create it?";
 const wxString & MainWindow::DIRECTION_QUESTION_TITLE = "Create direction?";
@@ -49,6 +53,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_MENU(wxID_ABOUT, MainWindow::OnAbout)
 	EVT_MENU(ID_MENU_EXPORT_SPRITE, MainWindow::OnExportSpriteMenu)
 	EVT_MENU(ID_MENU_EXPORT_COMPOSED, MainWindow::OnExportComposedFrameMenu)
+	EVT_MENU(ID_MENU_EXPORT_ANIMATION, MainWindow::OnExportAnimationMenu)
 	EVT_MENU(ID_MENU_DELETE_SPRITE, MainWindow::OnDeleteSpriteMenu)
 	EVT_MENU(ID_MENU_TOGGLE_SPRITE_BLOCKING, MainWindow::OnToggleSpriteBlockingMenu)
 	EVT_MENU(ID_MENU_TOGGLE_SPRITE_BLOCKING_ALL_FRAMES, MainWindow::OnToggleSpriteBlockingAllFramesMenu)
@@ -327,7 +332,7 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	patternHeightBox->Add(patternHeightLabel, 0, wxALIGN_CENTER_VERTICAL);
 	controlsToDisableOnPreview.push_back(patternHeightLabel);
 	patternHeightInput = new wxSpinCtrl(animationPanel, ID_PATTERN_HEIGHT_INPUT, "1", wxDefaultPosition,
-																		 wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
+																		  wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), wxTE_RIGHT);
 	patternHeightInput->SetRange(1, Config::MAX_XY_DIV);
 	patternHeightBox->Add(patternHeightInput, 0, wxLEFT | wxRIGHT, 5);
 	controlsToDisableOnPreview.push_back(patternHeightInput);
@@ -403,11 +408,11 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	                                    wxSize(Config::SMALL_SQUARE_BUTTON_SIZE, Config::SMALL_SQUARE_BUTTON_SIZE));
 	frameControlsSizer->Add(prevFrameButton, 0, wxLEFT, 5);
 	controlsToDisableOnPreview.push_back(prevFrameButton);
-	auto currentFrameLabel = new wxStaticText(animationPanel, -1, "fr #:");
+	auto currentFrameLabel = new wxStaticText(animationPanel, wxID_ANY, "fr #:");
 	currentFrameLabel->SetFont(monospaceFont);
 	frameControlsSizer->Add(currentFrameLabel, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
 	controlsToDisableOnPreview.push_back(currentFrameLabel);
-	currentFrameNumber = new wxStaticText(animationPanel, -1, STR_ZERO);
+	currentFrameNumber = new wxStaticText(animationPanel, wxID_ANY, STR_ZERO);
 	currentFrameNumber->SetFont(monospaceFont);
 	frameControlsSizer->Add(currentFrameNumber, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
 	controlsToDisableOnPreview.push_back(currentFrameNumber);
@@ -416,6 +421,24 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	frameControlsSizer->Add(nextFrameButton);
 	controlsToDisableOnPreview.push_back(nextFrameButton);
 	animationSettingsGridSizer->Add(frameControlsSizer, 0, wxALIGN_LEFT);
+
+	// frame time setting
+	auto frameTimeLabel = new wxStaticText(animationPanel, wxID_ANY, "Frame time:");
+	animationSettingsGridSizer->Add(frameTimeLabel, 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	controlsToDisableOnPreview.push_back(frameTimeLabel);
+
+	auto frameTimeInputSizer = new wxBoxSizer(wxHORIZONTAL);
+	wxIntegerValidator <unsigned int> val;
+	val.SetRange(0, 10000);
+	frameTimeInput = new wxTextCtrl(animationPanel, ID_FRAME_TIME_INPUT, STR_ZERO, wxDefaultPosition,
+																	wxSize(Config::COMMON_NUM_FIELD_WIDTH, -1), 0, val);
+	frameTimeInput->Bind(wxEVT_KILL_FOCUS, &MainWindow::OnFrameTimeChanged, this);
+	frameTimeInputSizer->Add(frameTimeInput);
+	controlsToDisableOnPreview.push_back(frameTimeInput);
+	auto frameInputMSLabel = new wxStaticText(animationPanel, wxID_ANY, "milliseconds");
+	frameTimeInputSizer->Add(frameInputMSLabel, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 5);
+	controlsToDisableOnPreview.push_back(frameInputMSLabel);
+	animationSettingsGridSizer->Add(frameTimeInputSizer, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL | wxLEFT, 5);
 
 	// always animated setting
 	alwaysAnimatedCheckbox = new wxCheckBox(animationPanel, ID_ALWAYS_ANIMATED_CHECKBOX, "Always animated");
@@ -654,8 +677,17 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	booleanAttrsPanel->Disable();
 	valueAttrsPanel->Disable();
 
-	// auto-backup setup
+	// default preferences
 	Settings & settings = Settings::getInstance();
+	wxString validateSignaturesValue = settings.get("validateSignatures");
+	if (!validateSignaturesValue)
+	{
+		// enabling signatures validation by default
+		settings.set("validateSignatures", "yes");
+		settings.save();
+	}
+
+	// auto-backup setup
 	wxString autoBackupEnabledValue = settings.get("autoBackupEnabled");
 	if (!autoBackupEnabledValue)
 	{
@@ -1128,87 +1160,89 @@ void MainWindow::setAttributeValues(bool isNewObject)
 void MainWindow::OnToggleAttrCheckbox(wxCommandEvent & event)
 {
 	bool value = event.GetInt() != 0;
-	bool oldValue = changeBooleanAttribute(event.GetId(), value);
+	bool oldValue = changeBooleanAttribute(selectedObject, event.GetId(), value);
 	auto & opInfo = addOperationInfo(BOOLEAN_ATTR_TOGGLE, oldValue, value);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	opInfo.controlID = event.GetId();
 	isDirty = true;
 }
 
-bool MainWindow::changeBooleanAttribute(int id, bool value)
+bool MainWindow::changeBooleanAttribute(shared_ptr <DatObject> object, int controlID, bool value)
 {
 	bool oldValue = false;
-	switch (id)
+	switch (controlID)
 	{
 		case ID_ATTR_IS_CONTAINER:
-			oldValue = selectedObject->isContainer;
-			selectedObject->isContainer = value;
-			selectedObject->allAttrs[AttrContainer] = value;
+			oldValue = object->isContainer;
+			object->isContainer = value;
+			object->allAttrs[AttrContainer] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is container", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_STACKABLE:
-			oldValue = selectedObject->isStackable;
-			selectedObject->isStackable = value;
-			selectedObject->allAttrs[AttrStackable] = value;
+			oldValue = object->isStackable;
+			object->isStackable = value;
+			object->allAttrs[AttrStackable] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is stackable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_MULTI_USE:
-			oldValue = selectedObject->isMultiUse;
-			selectedObject->isMultiUse = value;
-			selectedObject->allAttrs[AttrMultiUse] = value;
+			oldValue = object->isMultiUse;
+			object->isMultiUse = value;
+			object->allAttrs[AttrMultiUse] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Multi-use", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_WALKABLE:
-			oldValue = selectedObject->isWalkable;
-			selectedObject->isWalkable = value;
-			selectedObject->allAttrs[AttrNotWalkable] = !value;
+			oldValue = object->isWalkable;
+			object->isWalkable = value;
+			object->allAttrs[AttrNotWalkable] = !value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is walkable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_PATHABLE:
-			oldValue = selectedObject->isPathable;
-			selectedObject->isPathable = value;
-			selectedObject->allAttrs[AttrNotPathable] = !value;
+			oldValue = object->isPathable;
+			object->isPathable = value;
+			object->allAttrs[AttrNotPathable] = !value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is pathable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_MOVABLE:
-			oldValue = selectedObject->isMovable;
-			selectedObject->isMovable = value;
-			selectedObject->allAttrs[AttrNotMoveable] = !value;
+			oldValue = object->isMovable;
+			object->isMovable = value;
+			object->allAttrs[AttrNotMoveable] = !value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is movable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_BLOCKS_PROJECTILES:
-			oldValue = selectedObject->blocksProjectiles;
-			selectedObject->blocksProjectiles = value;
-			selectedObject->allAttrs[AttrBlockProjectile] = value;
+			oldValue = object->blocksProjectiles;
+			object->blocksProjectiles = value;
+			object->allAttrs[AttrBlockProjectile] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Block projectiles", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_PICKUPABLE:
-			oldValue = selectedObject->isPickupable;
-			selectedObject->isPickupable = value;
-			selectedObject->allAttrs[AttrPickupable] = value;
+			oldValue = object->isPickupable;
+			object->isPickupable = value;
+			object->allAttrs[AttrPickupable] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is pickupable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IGNORE_LOOK:
-			oldValue = selectedObject->ignoreLook;
-			selectedObject->ignoreLook = value;
-			selectedObject->allAttrs[AttrLook] = value;
+			oldValue = object->ignoreLook;
+			object->ignoreLook = value;
+			object->allAttrs[AttrLook] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Ignore look", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_HANGABLE:
-			oldValue = selectedObject->isHangable;
-			selectedObject->isHangable = value;
-			selectedObject->allAttrs[AttrHangable] = value;
+			oldValue = object->isHangable;
+			object->isHangable = value;
+			object->allAttrs[AttrHangable] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is hangable", value ? "on" : "off"));
 		break;
 		case ID_ATTR_IS_LYING_CORPSE:
-			oldValue = selectedObject->isLyingCorpse;
-			selectedObject->isLyingCorpse = value;
-			selectedObject->allAttrs[AttrLyingCorpse] = value;
+			oldValue = object->isLyingCorpse;
+			object->isLyingCorpse = value;
+			object->allAttrs[AttrLyingCorpse] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Is lying corpse", value ? "on" : "off"));
 		break;
 		case ID_ATTR_HAS_MOUNT:
-			oldValue = selectedObject->hasMount;
-			selectedObject->hasMount = value;
-			selectedObject->allAttrs[AttrMount] = value;
+			oldValue = object->hasMount;
+			object->hasMount = value;
+			object->allAttrs[AttrMount] = value;
 			statusBar->SetStatusText(wxString::Format(OBJ_ATTR_CHANGE_STATUS_MSG, "Has mount", value ? "on" : "off"));
 		break;
 	}
@@ -1294,6 +1328,7 @@ void MainWindow::fillAnimationSection(bool resetIterators)
 
 		alwaysAnimatedCheckbox->SetValue(selectedObject->isAlwaysAnimated);
 
+		setFrameTimeInputValue();
 		fillAnimationSprites();
 	}
 	else
@@ -1450,6 +1485,38 @@ void MainWindow::fillBitmapBuffers(unsigned char ** bitmapsRGB, unsigned char **
 	}
 }
 
+unsigned int MainWindow::getFrameTime(DatObjectCategory category, int objectID, int xDiv, int frame)
+{
+	if (category == InvalidCategory) category = currentCategory;
+	if (objectID == -1) objectID = selectedObject->id;
+	if (xDiv == -1) xDiv = currentXDiv;
+	if (frame == -1) frame = currentFrame;
+
+	unsigned int objIndex = objectID - (category == CategoryItem ? 100 : 1);
+	auto object = DatSprReaderWriter::getInstance().getObjects(category)->at(objIndex);
+	auto attrs = AdvancedAttributesManager::getInstance().getAttributes(category, objectID);
+	if (attrs && attrs->frameTimes)
+	{
+		unsigned int frameIndex = (xDiv * object->phasesCount) + currentFrame;
+		return attrs->frameTimes[frameIndex];
+	}
+	return 0;
+}
+
+void MainWindow::setFrameTimeInputValue()
+{
+	auto attrs = AdvancedAttributesManager::getInstance().getAttributes(currentCategory, selectedObject->id);
+	if (attrs && attrs->frameTimes)
+	{
+		unsigned int index = (currentXDiv * selectedObject->phasesCount) + currentFrame;
+		frameTimeInput->SetValue(wxString::Format("%i", attrs->frameTimes[index]));
+	}
+	else
+	{
+		frameTimeInput->SetValue(STR_ZERO);
+	}
+}
+
 void MainWindow::blendBitmapBuffers(unsigned char * destRGB, unsigned char * destAlpha,
 																		unsigned char * srcRGB, unsigned char * srcAlpha,
 																		unsigned int destWidth, unsigned int destHeight,
@@ -1484,7 +1551,9 @@ void MainWindow::OnAnimWidthChanged(wxSpinEvent & event)
 	if (!animationWidthInput) return;
 	
 	unsigned int val = animationWidthInput->GetValue();
-	addOperationInfo(ANIM_WIDTH_CHANGE, selectedObject->width, val);
+	auto & opInfo = addOperationInfo(ANIM_WIDTH_CHANGE, selectedObject->width, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	
 	selectedObject->width = val;
 	resizeObjectSpriteIDsArray(selectedObject);
@@ -1501,7 +1570,9 @@ void MainWindow::OnAnimHeightChanged(wxSpinEvent & event)
 	if (!animationHeightInput) return;
 
 	unsigned int val = animationHeightInput->GetValue();
-	addOperationInfo(ANIM_HEIGHT_CHANGE, selectedObject->height, val);
+	auto & opInfo = addOperationInfo(ANIM_HEIGHT_CHANGE, selectedObject->height, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	
 	selectedObject->height = val;
 	resizeObjectSpriteIDsArray(selectedObject);
@@ -1518,10 +1589,13 @@ void MainWindow::OnFramesAmountChanged(wxSpinEvent & event)
 	if (!amountOfFramesInput) return;
 
 	unsigned int val = amountOfFramesInput->GetValue();
-	addOperationInfo(AMOUNT_OF_FRAMES_CHANGE, selectedObject->phasesCount, val);
+	auto & opInfo = addOperationInfo(AMOUNT_OF_FRAMES_CHANGE, selectedObject->phasesCount, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 
 	selectedObject->phasesCount = val;
 	resizeObjectSpriteIDsArray(selectedObject);
+	resizeFrameTimesArray(currentCategory, selectedObject->id);
 	buildAnimationSpriteHolders();
 	fillAnimationSprites();
 
@@ -1593,13 +1667,16 @@ void MainWindow::OnClickOrientationButton(wxCommandEvent & event)
 	currentFrame = 0;
 	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
 
+	setFrameTimeInputValue();
 	fillAnimationSprites();
 }
 
 void MainWindow::OnPatternWidthChanged(wxSpinEvent & event)
 {
 	unsigned int val = event.GetInt();
-	addOperationInfo(PATTERN_WIDTH_CHANGE, selectedObject->patternWidth, val);
+	auto & opInfo = addOperationInfo(PATTERN_WIDTH_CHANGE, selectedObject->patternWidth, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 
 	selectedObject->patternWidth = val;
 	resizeObjectSpriteIDsArray(selectedObject);
@@ -1618,7 +1695,9 @@ void MainWindow::OnPatternWidthChanged(wxSpinEvent & event)
 void MainWindow::OnPatternHeightChanged(wxSpinEvent & event)
 {
 	unsigned int val = event.GetInt();
-	addOperationInfo(PATTERN_HEIGHT_CHANGE, selectedObject->patternHeight, val);
+	auto & opInfo = addOperationInfo(PATTERN_HEIGHT_CHANGE, selectedObject->patternHeight, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 
 	selectedObject->patternHeight = val;
 	resizeObjectSpriteIDsArray(selectedObject);
@@ -1639,6 +1718,7 @@ void MainWindow::OnClickPrevXDivButton(wxCommandEvent & event)
 	if (currentXDiv == 0) currentXDiv = selectedObject->patternWidth - 1;
 	else currentXDiv--;
 	currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
+	setFrameTimeInputValue();
 	fillAnimationSprites();
 }
 
@@ -1647,6 +1727,7 @@ void MainWindow::OnClickNextXDivButton(wxCommandEvent & event)
 	currentXDiv++;
 	if (currentXDiv >= selectedObject->patternWidth) currentXDiv = 0;
 	currentXDivLabel->SetLabelText(wxString::Format("%i", currentXDiv));
+	setFrameTimeInputValue();
 	fillAnimationSprites();
 }
 
@@ -1669,7 +1750,9 @@ void MainWindow::OnClickNextYDivButton(wxCommandEvent & event)
 void MainWindow::OnLayersCountChanged(wxSpinEvent & event)
 {
 	unsigned int val = event.GetInt();
-	addOperationInfo(LAYERS_COUNT_CHANGE, selectedObject->layersCount, val);
+	auto & opInfo = addOperationInfo(LAYERS_COUNT_CHANGE, selectedObject->layersCount, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 
 	selectedObject->layersCount = val;
 	resizeObjectSpriteIDsArray(selectedObject);
@@ -1706,6 +1789,8 @@ void MainWindow::OnClickPrevFrameButton(wxCommandEvent & event)
 	if (currentFrame == 0) currentFrame = selectedObject->phasesCount - 1;
 	else currentFrame--;
 	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+
+	setFrameTimeInputValue();
 	fillAnimationSprites();
 }
 
@@ -1714,7 +1799,53 @@ void MainWindow::OnClickNextFrameButton(wxCommandEvent & event)
 	currentFrame++;
 	if (currentFrame >= selectedObject->phasesCount) currentFrame = 0;
 	currentFrameNumber->SetLabelText(wxString::Format("%i", currentFrame));
+
+	setFrameTimeInputValue();
 	fillAnimationSprites();
+}
+
+void MainWindow::OnFrameTimeChanged(wxFocusEvent & event)
+{
+	if (frameTimeInput->GetValue().Length() == 0)
+	{
+		frameTimeInput->ChangeValue(STR_ZERO);
+	}
+
+	unsigned int val = wxAtoi(frameTimeInput->GetValue());
+	auto & aam = AdvancedAttributesManager::getInstance();
+	auto attrs = aam.getAttributes(currentCategory, selectedObject->id);
+	unsigned int index = (currentXDiv * selectedObject->phasesCount) + currentFrame, oldValue = 0;
+	if (!attrs)
+	{
+		attrs = make_shared <AdvancedObjectAttributes> ();
+	}
+	else
+	{
+		savedAttrsByCatAndId[currentCategory][selectedObject->id] = aam.makeAttrsCopy(attrs);
+	}
+	if (!attrs->frameTimes)
+	{
+		if (val == 0) return; // no existing frame time values and current value is 0 - doing nothing
+		unsigned int framesCount = selectedObject->phasesCount * selectedObject->patternWidth;
+		attrs->frameTimes = unique_ptr <unsigned int[]> (new unsigned int[framesCount]);
+		attrs->frameTimesLen = framesCount;
+		memset(attrs->frameTimes.get(), 0, framesCount * sizeof(unsigned int)); // zero values
+	}
+	else
+	{
+		oldValue = attrs->frameTimes[index];
+	}
+	attrs->frameTimes[index] = val;
+	aam.setAttributes(currentCategory, selectedObject->id, attrs);
+	changedAttrsByCatAndId[currentCategory][selectedObject->id] = aam.makeAttrsCopy(attrs);
+
+	auto & opInfo = addOperationInfo(ANIM_FRAME_TIME_CHANGE, oldValue, val);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
+	opInfo.orientaionID = currentXDiv;
+	opInfo.frameID = currentFrame;
+
+	isDirty = true;
 }
 
 void MainWindow::OnPreviewFPSChanged(wxSpinEvent & event)
@@ -1726,7 +1857,8 @@ void MainWindow::OnPreviewFPSChanged(wxSpinEvent & event)
 		settings.set("previewFPS", wxString::Format("%i", val));
 		settings.save();
 		previewTimer->Stop();
-		previewTimer->Start(1000 / val);
+		previewFrameTime = 1000 / val;
+		previewTimer->StartOnce(previewFrameTime);
 	}
 }
 
@@ -1746,7 +1878,8 @@ void MainWindow::startAnimationPreview()
 {
 	isPreviewAnimationOn = true;
 	lastCurrentFrame = currentFrame;
-	previewTimer->Start(1000 / previewFpsInput->GetValue());
+	previewFrameTime = 1000 / previewFpsInput->GetValue();
+	previewTimer->StartOnce(previewFrameTime);
 	dynamic_cast <wxButton *> (FindWindow(ID_PREVIEW_ANIMATION_BUTTON))->SetLabelText("Stop preview");
 	statusBar->SetStatusText("Animation preview started");
 	for (auto elem : controlsToDisableOnPreview)
@@ -1774,6 +1907,8 @@ void MainWindow::OnPreviewTimerEvent(wxTimerEvent & event)
 	currentFrame++;
 	if (currentFrame >= selectedObject->phasesCount) currentFrame = 0;
 	fillAnimationSprites();
+	int frameTime = getFrameTime();
+	previewTimer->StartOnce(frameTime ? frameTime : previewFrameTime);
 }
 
 void MainWindow::OnAutoBackupTimerEvent(wxTimerEvent & event)
@@ -1835,8 +1970,9 @@ void MainWindow::deleteSelectedObject()
 		deletedObjectsByCatAndId[currentCategory][id] = ret.first;
 		deletedAttrsByCatAndId[currentCategory][id] = ret.second;
 
-		// putting currentCategory instead of newIntValue
-		addOperationInfo(OBJECT_DELETION, id, currentCategory);
+		auto & opInfo = addOperationInfo(OBJECT_DELETION, 0, 0);
+		opInfo.categoryID = currentCategory;
+		opInfo.objectID = selectedObject->id;
 
 		statusBar->SetStatusText(wxString::Format("Deleted object <%i>", id));
 
@@ -2018,15 +2154,28 @@ void MainWindow::OnRightClickAnimGridCell(wxMouseEvent & event)
 	{
 		contextMenu.Append(ID_MENU_EXPORT_COMPOSED, "Export composed frame into PNG-file");
 	}
-	contextMenu.Append(ID_MENU_DELETE_SPRITE, "Delete this sprite");
+	if (selectedObject->phasesCount > 1)
+	{
+		contextMenu.Append(ID_MENU_EXPORT_ANIMATION, "Export animation into GIF-file");
+	}
+
 	contextMenu.AppendSeparator();
+
 	contextMenu.Append(ID_MENU_TOGGLE_SPRITE_BLOCKING, "Toggle sprite 'blocking' state");
-	contextMenu.Append(ID_MENU_TOGGLE_SPRITE_BLOCKING_ALL_FRAMES, "Toggle spite 'blocking' state on all frames");
+	if (selectedObject->phasesCount > 1)
+	{
+		contextMenu.Append(ID_MENU_TOGGLE_SPRITE_BLOCKING_ALL_FRAMES, "Toggle spite 'blocking' state on all frames");
+	}
+
+	contextMenu.AppendSeparator();
+	contextMenu.Append(ID_MENU_DELETE_SPRITE, "Delete this sprite");
+
 	auto onMenuClose = [&](wxMenuEvent & event)
 	{
 		clearAnimationSpriteSelection(contextMenuTargetBitmap);
 	};
 	contextMenu.Bind(wxEVT_MENU_CLOSE, onMenuClose);
+
 	PopupMenu(&contextMenu);
 }
 
@@ -2043,7 +2192,9 @@ void MainWindow::OnRightClickObjectSprite(wxMouseEvent & event)
 void MainWindow::OnToggleAlwaysAnimatedAttr(wxCommandEvent & event)
 {
 	bool value = event.GetInt() != 0;
-	addOperationInfo(ALWAYS_ANIMATED_TOGGLE, selectedObject->isAlwaysAnimated, value);
+	auto & opInfo = addOperationInfo(ALWAYS_ANIMATED_TOGGLE, selectedObject->isAlwaysAnimated, value);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 
 	selectedObject->isAlwaysAnimated = value;
 	selectedObject->allAttrs[AttrAnimateAlways] = value;
@@ -2078,6 +2229,8 @@ void MainWindow::OnToggleIsFullGroundAttr(wxCommandEvent & event)
 	selectedObject->groundSpeed = value ? wxAtoi(groundSpeedInput->GetValue()) : 0;
 
 	auto & opInfo = addOperationInfo(FULL_GROUND_TOGGLE, oldValue, value);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	opInfo.controlID = ID_ATTR_IS_FULL_GROUND;
 
 	isDirty = true;
@@ -2107,6 +2260,8 @@ void MainWindow::OnToggleHasLightAttr(wxCommandEvent & event)
 	}
 
 	auto & opInfo = addOperationInfo(HAS_LIGHT_TOGGLE, oldValue, value);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	opInfo.controlID = ID_ATTR_HAS_LIGHT;
 
 	isDirty = true;
@@ -2134,6 +2289,8 @@ void MainWindow::OnToggleHasOffsetAttr(wxCommandEvent & event)
 	}
 
 	auto & opInfo = addOperationInfo(HAS_OFFSET_TOGGLE, oldValue, value);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	opInfo.controlID = ID_ATTR_HAS_OFFSET;
 
 	isDirty = true;
@@ -2151,6 +2308,8 @@ void MainWindow::OnToggleHasElevationAttr(wxCommandEvent & event)
 	selectedObject->elevation = value ? wxAtoi(elevationInput->GetValue()) : 0;
 
 	auto & opInfo = addOperationInfo(HAS_ELEVATION_TOGGLE, oldValue, value);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 	opInfo.controlID = ID_ATTR_HAS_ELEVATION;
 
 	isDirty = true;
@@ -2163,7 +2322,10 @@ void MainWindow::OnGroundSpeedChanged(wxCommandEvent & event)
 	if (selectedObject)
 	{
 		unsigned int val = wxAtoi(groundSpeedInput->GetValue());
-		addOperationInfo(GROUND_SPEED_CHANGE, selectedObject->groundSpeed, val);
+		auto & opInfo = addOperationInfo(GROUND_SPEED_CHANGE, selectedObject->groundSpeed, val);
+		opInfo.categoryID = currentCategory;
+		opInfo.objectID = selectedObject->id;
+
 		selectedObject->groundSpeed = val;
 		statusBar->SetStatusText(wxString::Format("Object \"Ground speed\" value changed to %i", selectedObject->groundSpeed));
 		isDirty = true;
@@ -2175,7 +2337,10 @@ void MainWindow::OnLightColorChanged(wxColourPickerEvent & event)
 	if (selectedObject)
 	{
 		const wxColour & color = event.GetColour();
-		addOperationInfo(LIGHT_COLOR_CHANGE, lastLightColorValue.GetRGB(), color.GetRGB());
+		auto & opInfo = addOperationInfo(LIGHT_COLOR_CHANGE, lastLightColorValue.GetRGB(), color.GetRGB());
+		opInfo.categoryID = currentCategory;
+		opInfo.objectID = selectedObject->id;
+
 		selectedObject->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
 		                           + floor(color.Blue() / 0x33);
 		lastLightColorValue = color;
@@ -2188,7 +2353,10 @@ void MainWindow::OnLightIntensityChanged(wxCommandEvent & event)
 	if (selectedObject)
 	{
 		unsigned int val = wxAtoi(lightIntensityInput->GetValue());
-		addOperationInfo(LIGHT_INTENSITY_CHANGE, selectedObject->lightIntensity, val);
+		auto & opInfo = addOperationInfo(LIGHT_INTENSITY_CHANGE, selectedObject->lightIntensity, val);
+		opInfo.categoryID = currentCategory;
+		opInfo.objectID = selectedObject->id;
+
 		selectedObject->lightIntensity = val;
 		statusBar->SetStatusText(wxString::Format("Object \"Light intensity\" value changed to %i", selectedObject->lightIntensity));
 		isDirty = true;
@@ -2204,7 +2372,10 @@ void MainWindow::OnOffsetXYChanged(wxCommandEvent & event)
 		{
 			unsigned int val = wxAtoi(offsetXInput->GetValue());
 			auto & opInfo = addOperationInfo(OFFSET_XY_CHANGE, selectedObject->displacementX, val);
+			opInfo.categoryID = currentCategory;
+			opInfo.objectID = selectedObject->id;
 			opInfo.controlID = ID_OFFSET_X_INPUT;
+
 			selectedObject->displacementX = val;
 			statusBar->SetStatusText(wxString::Format("Object \"Offset X\" value changed to %i", selectedObject->displacementX));
 		}
@@ -2212,7 +2383,10 @@ void MainWindow::OnOffsetXYChanged(wxCommandEvent & event)
 		{
 			unsigned int val = wxAtoi(offsetYInput->GetValue());
 			auto & opInfo = addOperationInfo(OFFSET_XY_CHANGE, selectedObject->displacementY, val);
+			opInfo.categoryID = currentCategory;
+			opInfo.objectID = selectedObject->id;
 			opInfo.controlID = ID_OFFSET_Y_INPUT;
+
 			selectedObject->displacementY = val;
 			statusBar->SetStatusText(wxString::Format("Object \"Offset Y\" value changed to %i", selectedObject->displacementY));
 		}
@@ -2225,7 +2399,10 @@ void MainWindow::OnElevationChanged(wxCommandEvent & event)
 	if (selectedObject)
 	{
 		unsigned int val = wxAtoi(elevationInput->GetValue());
-		addOperationInfo(ELEVATION_CHANGE, selectedObject->elevation, val);
+		auto & opInfo = addOperationInfo(ELEVATION_CHANGE, selectedObject->elevation, val);
+		opInfo.categoryID = currentCategory;
+		opInfo.objectID = selectedObject->id;
+
 		selectedObject->elevation = val;
 		statusBar->SetStatusText(wxString::Format("Object \"Elevation\" value changed to %i", selectedObject->elevation));
 		isDirty = true;
@@ -2267,8 +2444,8 @@ void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
 {
 	auto oldSpriteCount = object->spriteCount;
 	auto oldSpriteIDs = unique_ptr <unsigned int[]> (object->spriteIDs.release());
-	object->spriteCount = object->width * object->height * object->layersCount * object->patternWidth
-                      * object->patternHeight * object->patternDepth * object->phasesCount;
+	object->spriteCount = object->width * object->height * object->patternWidth * object->patternHeight
+	                    * object->patternDepth * object->phasesCount * object->layersCount;
 	object->spriteIDs = unique_ptr <unsigned int[]> (new unsigned int[object->spriteCount]);
 	unsigned int minSpriteCount = std::min(object->spriteCount, oldSpriteCount);
 	for (unsigned int i = 0; i < minSpriteCount; ++i)
@@ -2279,6 +2456,28 @@ void MainWindow::resizeObjectSpriteIDsArray(shared_ptr <DatObject> object)
 	{
 		object->spriteIDs[i] = 0;
 	}
+}
+
+void MainWindow::resizeFrameTimesArray(DatObjectCategory category, unsigned int id)
+{
+	auto & aam = AdvancedAttributesManager::getInstance();
+	auto attrs = aam.getAttributes(category, id);
+	if (!attrs || !attrs->frameTimes) return;
+
+	unsigned int newCount = selectedObject->phasesCount * selectedObject->patternWidth;
+	auto curFrameTimes = attrs->frameTimes.get();
+	auto newFrameTimes = new unsigned int[newCount];
+	memset(attrs->frameTimes.get(), 0, newCount * sizeof(unsigned int)); // zero values
+	// copying values from old to new
+	unsigned int minLen = min(attrs->frameTimesLen, newCount);
+	for (unsigned int i = 0; i < minLen; ++i)
+	{
+		newFrameTimes[i] = curFrameTimes[i];
+	}
+
+	attrs->frameTimes.reset(newFrameTimes);
+	attrs->frameTimesLen = newCount;
+	aam.setAttributes(category, id, attrs);
 }
 
 void MainWindow::OnExit(wxCommandEvent & event)
@@ -2307,7 +2506,7 @@ void MainWindow::OnAdvancedAttributesDialog(wxCommandEvent & event)
 			if (isPreviewAnimationOn) stopAnimationPreview();
 			unsigned int id = selectedObject->id;
 			auto & aam = AdvancedAttributesManager::getInstance();
-			savedAttrsByCatAndId[currentCategory][id] = aam.getAttributes(currentCategory, id);
+			savedAttrsByCatAndId[currentCategory][id] = aam.makeAttrsCopy(aam.getAttributes(currentCategory, id));
 			AdvancedAttributesDialog dialog(this, currentCategory, id);
 			dialog.ShowModal();
 		}
@@ -2330,9 +2529,10 @@ void MainWindow::OnAdvancedAttributesChanged(wxCommandEvent & event)
 
 	unsigned int id = selectedObject->id;
 	auto & aam = AdvancedAttributesManager::getInstance();
-	changedAttrsByCatAndId[currentCategory][id] = aam.getAttributes(currentCategory, id);
-	// putting currentCategory instead of newIntValue
-	addOperationInfo(ADVANCED_ATTRS_CHANGE, id, currentCategory);
+	changedAttrsByCatAndId[currentCategory][id] = aam.makeAttrsCopy(aam.getAttributes(currentCategory, id));
+	auto & opInfo = addOperationInfo(ADVANCED_ATTRS_CHANGE, 0, 0);
+	opInfo.categoryID = currentCategory;
+	opInfo.objectID = selectedObject->id;
 
 	isDirty = true;
 
@@ -2444,41 +2644,15 @@ void MainWindow::OnExportComposedFrameMenu(wxCommandEvent & event)
 		settings.save();
 
 		int frameSize = selectedObject->width * selectedObject->height;
-		// these buffers will be used for manual blending
-		unsigned char ** bitmapsRGB = new unsigned char * [frameSize];
-		unsigned char ** bitmapsAlpha = new unsigned char * [frameSize];
-
-		// these are buffers for composed frame
 		int rgbLen = Sprite::RGB_SIZE * frameSize, alphaLen = Sprite::ALPHA_SIZE * frameSize;
-		unsigned char * resultRGB = new unsigned char[rgbLen];
-		unsigned char * resultAlpha = new unsigned char[alphaLen];
-		memset(resultRGB, 0, rgbLen);
-		memset(resultAlpha, 0, alphaLen);
-
-		bool ddbmValue = doDrawBlockingMarks;
-		doDrawBlockingMarks = false; // turning of blocking marks, because we don't need them in resulting image
-		fillBitmapBuffers(bitmapsRGB, bitmapsAlpha);
-		doDrawBlockingMarks = ddbmValue;
-
-		// now copying processed (and probably blended) sprite buffers into composed frame buffer
 		int destWidth = selectedObject->width * Config::SPRITE_SIZE;
 		int destHeight = selectedObject->height * Config::SPRITE_SIZE;
-		int x = 0, y = 0;
-		for (int i = 0; i < frameSize; ++i)
-		{
-			blendBitmapBuffers(resultRGB, resultAlpha, bitmapsRGB[i], bitmapsAlpha[i], destWidth, destHeight,
-			                   Config::SPRITE_SIZE, Config::SPRITE_SIZE, x, y);
-			x += Config::SPRITE_SIZE;
-			if (x >= destWidth)
-			{
-				x = 0;
-				y += Config::SPRITE_SIZE;
-			}
-			delete [] bitmapsRGB[i];
-			delete [] bitmapsAlpha[i];
-		}
-		delete [] bitmapsRGB;
-		delete [] bitmapsAlpha;
+
+		// these are buffers for composed frame
+		unsigned char * resultRGB = new unsigned char[rgbLen];
+		unsigned char * resultAlpha = new unsigned char[alphaLen];
+
+		composeFrame(resultRGB, resultAlpha);
 
 		wxImage composed(destWidth, destHeight, resultRGB, resultAlpha, true);
 		if (composed.SaveFile(path, wxBITMAP_TYPE_PNG))
@@ -2492,6 +2666,108 @@ void MainWindow::OnExportComposedFrameMenu(wxCommandEvent & event)
 		delete [] resultRGB;
 		delete [] resultAlpha;
 	}
+}
+
+void MainWindow::OnExportAnimationMenu(wxCommandEvent & event)
+{
+	Settings & settings = Settings::getInstance();
+	const wxString & browseDir = settings.get("spriteExportDir");
+	wxFileDialog browseDialog(this, "Export animation", browseDir, "animation.gif", "*.gif|*.gif|All files|*", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if (browseDialog.ShowModal() == wxID_OK)
+	{
+		const wxString & path = browseDialog.GetPath();
+		wxFileName filename(path);
+		settings.set("spriteExportDir", filename.GetPath());
+		settings.save();
+
+		ExportAnimationDialog exportAnimationDialog(this, 0, selectedObject->phasesCount - 1);
+		if (exportAnimationDialog.ShowModal() != wxID_OK) return;
+
+		int frameSize = selectedObject->width * selectedObject->height;
+		int rgbLen = Sprite::RGB_SIZE * frameSize, alphaLen = Sprite::ALPHA_SIZE * frameSize;
+		int destWidth = selectedObject->width * Config::SPRITE_SIZE;
+		int destHeight = selectedObject->height * Config::SPRITE_SIZE;
+
+		// these are buffers for composed frame
+		unsigned char * resultRGB = new unsigned char[rgbLen];
+		unsigned char * resultAlpha = new unsigned char[alphaLen];
+
+		unsigned int lastCurrentFrame = currentFrame;
+
+		vector <Image> frames;
+		int defaultFrameTime = 100 / previewFpsInput->GetValue(), frameTime = 0;
+		unsigned int frameTo = exportAnimationDialog.getFrameTo();
+		for (currentFrame = exportAnimationDialog.getFrameFrom(); currentFrame <= frameTo; ++currentFrame)
+		{
+			composeFrame(resultRGB, resultAlpha, exportAnimationDialog.getAnimBgColor());
+			Image img(destWidth, destHeight, "RGB", CharPixel, resultRGB);
+			frameTime = getFrameTime() / 10;
+			img.animationDelay(frameTime ? frameTime : defaultFrameTime);
+			frames.push_back(img);
+		}
+		try
+		{
+			Magick::writeImages(frames.begin(), frames.end(), (const char *) path.c_str());
+			statusBar->SetStatusText("Animation successfully exported");
+		}
+		catch (Exception & ex)
+		{
+			wxMessageBox("Animation export failed, error occured", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+		}
+
+		currentFrame = lastCurrentFrame;
+	}
+}
+
+void MainWindow::composeFrame(unsigned char * resultRGB, unsigned char * resultAlpha, const wxColour & bgColor)
+{
+	int frameSize = selectedObject->width * selectedObject->height;
+	int rgbLen = Sprite::RGB_SIZE * frameSize, alphaLen = Sprite::ALPHA_SIZE * frameSize;
+
+	if (bgColor == wxNullColour)
+	{
+		memset(resultRGB, 0, rgbLen);
+		memset(resultAlpha, 0, alphaLen);
+	}
+	else
+	{
+		for (int i = 0; i < rgbLen; i += 3)
+		{
+			resultRGB[i] = bgColor.Red();
+			resultRGB[i + 1] = bgColor.Green();
+			resultRGB[i + 2] = bgColor.Blue();
+		}
+		memset(resultAlpha, 255, alphaLen); // non-transparent background color
+	}
+
+	// these buffers will be used for manual blending
+	unsigned char ** bitmapsRGB = new unsigned char * [frameSize];
+	unsigned char ** bitmapsAlpha = new unsigned char * [frameSize];
+
+	bool ddbmValue = doDrawBlockingMarks;
+	doDrawBlockingMarks = false; // turning of blocking marks, because we don't need them in resulting image
+	fillBitmapBuffers(bitmapsRGB, bitmapsAlpha);
+	doDrawBlockingMarks = ddbmValue;
+
+	// now copying processed (and probably blended) sprite buffers into composed frame buffer
+	int destWidth = selectedObject->width * Config::SPRITE_SIZE;
+	int destHeight = selectedObject->height * Config::SPRITE_SIZE;
+	int x = 0, y = 0;
+	for (int i = 0; i < frameSize; ++i)
+	{
+		blendBitmapBuffers(resultRGB, resultAlpha, bitmapsRGB[i], bitmapsAlpha[i], destWidth, destHeight,
+											 Config::SPRITE_SIZE, Config::SPRITE_SIZE, x, y);
+		x += Config::SPRITE_SIZE;
+		if (x >= destWidth)
+		{
+			x = 0;
+			y += Config::SPRITE_SIZE;
+		}
+		delete [] bitmapsRGB[i];
+		delete [] bitmapsAlpha[i];
+	}
+	delete [] bitmapsRGB;
+	delete [] bitmapsAlpha;
 }
 
 void MainWindow::OnDeleteSpriteMenu(wxCommandEvent & event)
@@ -2528,60 +2804,22 @@ void MainWindow::OnDeleteSpriteMenu(wxCommandEvent & event)
 
 void MainWindow::OnToggleSpriteBlockingMenu(wxCommandEvent & event)
 {
-	auto sprites = DatSprReaderWriter::getInstance().getSprites();
-	unsigned int spriteIdIndex = getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap);
-	unsigned int spriteID = selectedObject->spriteIDs[spriteIdIndex];
-	if (spriteID && sprites->find(spriteID) != sprites->end())
-	{
-		auto sprite = sprites->at(spriteID);
-		bool newBlockingValue = !sprite->isBlocking;
-		if (selectedObject->layersCount > 1)
-		{
-			// if we have several layers, we need to go through them and update each sprite 'blocking' state
-			// which are on the same position in the grid
-			unsigned int curLayer = currentLayer;
-			bool first = true;
-			for (currentLayer = 0; currentLayer < selectedObject->layersCount; ++currentLayer)
-			{
-				spriteIdIndex = getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap);
-				spriteID = selectedObject->spriteIDs[spriteIdIndex];
-				if (spriteID && sprites->find(spriteID) != sprites->end())
-				{
-					sprite = sprites->at(spriteID);
-
-					auto & opInfo = addOperationInfo(SPRITE_BLOCKING_CHANGE, sprite->isBlocking, newBlockingValue, !first);
-					opInfo.categoryID = currentCategory;
-					opInfo.objectID = selectedObject->id;
-					opInfo.spriteID = spriteID;
-
-					sprite->isBlocking = newBlockingValue;
-
-					first = false;
-				}
-			}
-			currentLayer = curLayer;
-		}
-		else
-		{
-			auto & opInfo = addOperationInfo(SPRITE_BLOCKING_CHANGE, sprite->isBlocking, newBlockingValue);
-			opInfo.categoryID = currentCategory;
-			opInfo.objectID = selectedObject->id;
-			opInfo.spriteID = spriteID;
-			sprite->isBlocking = newBlockingValue;
-		}
-	}
-
+	toggleSpriteBlocking(false);
 	fillAnimationSprites();
-
-	statusBar->SetStatusText(wxString::Format("Changed 'blocking' state of sprite <%i>", spriteID));
-
+	statusBar->SetStatusText("Toggled sprite 'blocking' state");
 	isDirty = true;
 }
 
 void MainWindow::OnToggleSpriteBlockingAllFramesMenu(wxCommandEvent & event)
 {
-	// TODO
-	auto sprites = DatSprReaderWriter::getInstance().getSprites();
+	unsigned int lastCurrentFrame = currentFrame;
+	for (currentFrame = 0; currentFrame < selectedObject->phasesCount; ++currentFrame)
+	{
+		toggleSpriteBlocking(currentFrame > 0);
+	}
+	currentFrame = lastCurrentFrame;
+	fillAnimationSprites();
+	statusBar->SetStatusText("Toggled sprite 'blocking' state");
 }
 
 unsigned int MainWindow::getSpriteIdIndexOfAnimGridBitmap(wxGenericStaticBitmap * animGridBitmap)
@@ -2597,6 +2835,55 @@ unsigned int MainWindow::getSpriteIdIndexOfAnimGridBitmap(wxGenericStaticBitmap 
 	unsigned int spriteIdIndex = (currentLayer + xyDivIndex  + frameIndex) * frameSize
 	                           + (frameSize - 1 - spriteHolderIndex);
 	return spriteIdIndex;
+}
+
+void MainWindow::toggleSpriteBlocking(bool chainedUndo)
+{
+	auto sprites = DatSprReaderWriter::getInstance().getSprites();
+	unsigned int spriteIdIndex = getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap);
+	unsigned int spriteID = selectedObject->spriteIDs[spriteIdIndex];
+	if (spriteID && sprites->find(spriteID) != sprites->end())
+	{
+		auto sprite = sprites->at(spriteID);
+		bool newBlockingValue = !sprite->isBlocking;
+		if (selectedObject->layersCount > 1)
+		{
+			// if we have several layers, we need to go through them and update each sprite 'blocking' state
+			// which are on the same position in the grid
+			unsigned int lastCurrentLayer = currentLayer;
+			bool first = true;
+			for (currentLayer = 0; currentLayer < selectedObject->layersCount; ++currentLayer)
+			{
+				spriteIdIndex = getSpriteIdIndexOfAnimGridBitmap(contextMenuTargetBitmap);
+				spriteID = selectedObject->spriteIDs[spriteIdIndex];
+				if (spriteID && sprites->find(spriteID) != sprites->end())
+				{
+					sprite = sprites->at(spriteID);
+
+					auto & opInfo = addOperationInfo(SPRITE_BLOCKING_CHANGE, sprite->isBlocking, newBlockingValue, !first);
+					opInfo.categoryID = currentCategory;
+					opInfo.objectID = selectedObject->id;
+					opInfo.spriteID = spriteID;
+					opInfo.chainedUndo = chainedUndo || (currentLayer > 0);
+
+					sprite->isBlocking = newBlockingValue;
+
+					first = false;
+				}
+			}
+			currentLayer = lastCurrentLayer;
+		}
+		else
+		{
+			auto & opInfo = addOperationInfo(SPRITE_BLOCKING_CHANGE, sprite->isBlocking, newBlockingValue);
+			opInfo.categoryID = currentCategory;
+			opInfo.objectID = selectedObject->id;
+			opInfo.spriteID = spriteID;
+			opInfo.chainedUndo = chainedUndo || (currentLayer > 0);
+
+			sprite->isBlocking = newBlockingValue;
+		}
+	}
 }
 
 MainWindow::OperationInfo & MainWindow::addOperationInfo(OperationID operationID, int oldValue, int newValue, bool chained)
@@ -2639,70 +2926,109 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 {
 	OperationInfo info = undoStack.top();
 
+	auto & dsrw = DatSprReaderWriter::getInstance();
+	DatObjectCategory cat = (DatObjectCategory) info.categoryID;
+	unsigned int objID = info.objectID;
+	auto objects = dsrw.getObjects(cat);
+	unsigned int index = objID - (cat == CategoryItem ? 100 : 1);
+	auto object = objects->at(index);
+	bool objectIsSelected = (cat == currentCategory && selectedObject && objID == selectedObject->id);
+
 	switch (info.operationID)
 	{
 		case ANIM_WIDTH_CHANGE:
 		{
-			animationWidthInput->SetValue(info.oldIntValue);
-			selectedObject->width = (unsigned char) info.oldIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->width = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				animationWidthInput->SetValue(info.oldIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "animation width change"));
 		}
 		break;
 
 		case ANIM_HEIGHT_CHANGE:
 		{
-			animationHeightInput->SetValue(info.oldIntValue);
-			selectedObject->height = (unsigned char) info.oldIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->height = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				animationHeightInput->SetValue(info.oldIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "animation height change"));
 		}
 		break;
 
 		case PATTERN_WIDTH_CHANGE:
 		{
-			patternWidthInput->SetValue(info.oldIntValue);
-			selectedObject->patternWidth = (unsigned char) info.oldIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->patternWidth = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(object);
+			resizeFrameTimesArray(cat, objID);
+
+			if (objectIsSelected)
+			{
+				patternWidthInput->SetValue(info.oldIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "pattern width change"));
 		}
 		break;
 
 		case PATTERN_HEIGHT_CHANGE:
 		{
-			patternHeightInput->SetValue(info.oldIntValue);
-			selectedObject->patternHeight = (unsigned char) info.oldIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->patternHeight = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				patternHeightInput->SetValue(info.oldIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "pattern height change"));
 		}
 		break;
 
 		case LAYERS_COUNT_CHANGE:
 		{
-			layersCountInput->SetValue(info.oldIntValue);
-			selectedObject->layersCount = (unsigned char) info.oldIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->layersCount = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				layersCountInput->SetValue(info.oldIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "layers count change"));
 		}
 		break;
 
 		case AMOUNT_OF_FRAMES_CHANGE:
 		{
-			amountOfFramesInput->SetValue(info.oldIntValue);
-			selectedObject->phasesCount = (unsigned char) info.oldIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->phasesCount = (unsigned char) info.oldIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				amountOfFramesInput->SetValue(info.oldIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "amount of frames change"));
 		}
 		break;
@@ -2710,8 +3036,13 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case ALWAYS_ANIMATED_TOGGLE:
 		{
 			bool value = info.oldIntValue != 0;
-			alwaysAnimatedCheckbox->SetValue(value);
-			selectedObject->isAlwaysAnimated = value;
+			object->isAlwaysAnimated = value;
+
+			if (objectIsSelected)
+			{
+				alwaysAnimatedCheckbox->SetValue(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Always animated\" attribute toggle"));
 		}
 		break;
@@ -2719,8 +3050,13 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case BOOLEAN_ATTR_TOGGLE:
 		{
 			bool value = info.oldIntValue != 0;
-			booleanAttrCheckboxes[info.controlID]->SetValue(value);
-			changeBooleanAttribute(info.controlID, value);
+			changeBooleanAttribute(object, info.controlID, value);
+
+			if (objectIsSelected)
+			{
+				booleanAttrCheckboxes[info.controlID]->SetValue(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         booleanAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -2729,12 +3065,16 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case FULL_GROUND_TOGGLE:
 		{
 			bool value = info.oldIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			groundSpeedLabel->Enable(value);
-			groundSpeedInput->Enable(value);
-			selectedObject->isGround = selectedObject->isFullGround = value;
-			selectedObject->allAttrs[AttrGround] = selectedObject->allAttrs[AttrFullGround] = value;
-			selectedObject->groundSpeed = value ? wxAtoi(groundSpeedInput->GetValue()) : 0;
+			object->isGround = object->isFullGround = value;
+			object->allAttrs[AttrGround] = object->allAttrs[AttrFullGround] = value;
+
+			if (objectIsSelected)
+			{
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				groundSpeedLabel->Enable(value);
+				groundSpeedInput->Enable(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -2743,24 +3083,18 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case HAS_LIGHT_TOGGLE:
 		{
 			bool value = info.oldIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			lightColorLabel->Enable(value);
-			lightColorPicker->Enable(value);
-			lightIntensityLabel->Enable(value);
-			lightIntensityInput->Enable(value);
-			selectedObject->isLightSource = value;
-			selectedObject->allAttrs[AttrLight] = value;
-			const wxColour & color = lightColorPicker->GetColour();
-			if (value)
+			object->isLightSource = value;
+			object->allAttrs[AttrLight] = value;
+
+			if (objectIsSelected)
 			{
-				selectedObject->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
-																	 + floor(color.Blue() / 0x33);
-				selectedObject->lightIntensity = wxAtoi(lightIntensityInput->GetValue());
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				lightColorLabel->Enable(value);
+				lightColorPicker->Enable(value);
+				lightIntensityLabel->Enable(value);
+				lightIntensityInput->Enable(value);
 			}
-			else
-			{
-				selectedObject->lightColor = selectedObject->lightIntensity = 0;
-			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -2769,22 +3103,18 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case HAS_OFFSET_TOGGLE:
 		{
 			bool value = info.oldIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			offsetXLabel->Enable(value);
-			offsetXInput->Enable(value);
-			offsetYLabel->Enable(value);
-			offsetYInput->Enable(value);
-			selectedObject->hasDisplacement = value;
-			selectedObject->allAttrs[AttrDisplacement] = value;
-			if (value)
+			object->hasDisplacement = value;
+			object->allAttrs[AttrDisplacement] = value;
+
+			if (objectIsSelected)
 			{
-				selectedObject->displacementX = wxAtoi(offsetXInput->GetValue());
-				selectedObject->displacementY = wxAtoi(offsetYInput->GetValue());
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				offsetXLabel->Enable(value);
+				offsetXInput->Enable(value);
+				offsetYLabel->Enable(value);
+				offsetYInput->Enable(value);
 			}
-			else
-			{
-				selectedObject->displacementX = selectedObject->displacementY = 0;
-			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -2793,12 +3123,16 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case HAS_ELEVATION_TOGGLE:
 		{
 			bool value = info.oldIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			elevationLabel->Enable(value);
-			elevationInput->Enable(value);
-			selectedObject->isRaised = value;
-			selectedObject->allAttrs[AttrElevation] = value;
-			selectedObject->elevation = value ? wxAtoi(elevationInput->GetValue()) : 0;
+			object->isRaised = value;
+			object->allAttrs[AttrElevation] = value;
+
+			if (objectIsSelected)
+			{
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				elevationLabel->Enable(value);
+				elevationInput->Enable(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -2806,8 +3140,11 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 
 		case GROUND_SPEED_CHANGE:
 		{
-			groundSpeedInput->ChangeValue(wxString::Format("%i", info.oldIntValue));
-			selectedObject->groundSpeed = (unsigned char) info.oldIntValue;
+			object->groundSpeed = (unsigned char) info.oldIntValue;
+			if (objectIsSelected)
+			{
+				groundSpeedInput->ChangeValue(wxString::Format("%i", info.oldIntValue));
+			}
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Ground speed\" change"));
 		}
 		break;
@@ -2815,18 +3152,25 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		case LIGHT_COLOR_CHANGE:
 		{
 			wxColour color(info.oldIntValue);
-			lightColorPicker->SetColour(color);
-			lastLightColorValue = color;
-			selectedObject->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
+			object->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
 			                           + floor(color.Blue() / 0x33);
+			if (objectIsSelected)
+			{
+				lightColorPicker->SetColour(color);
+				lastLightColorValue = color;
+			}
+
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Light color\" change"));
 		}
 		break;
 
 		case LIGHT_INTENSITY_CHANGE:
 		{
-			lightIntensityInput->ChangeValue(wxString::Format("%i", info.oldIntValue));
-			selectedObject->lightIntensity = (unsigned char) info.oldIntValue;
+			object->lightIntensity = (unsigned char) info.oldIntValue;
+			if (objectIsSelected)
+			{
+				lightIntensityInput->ChangeValue(wxString::Format("%i", info.oldIntValue));
+			}
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Light intensity\" change"));
 		}
 		break;
@@ -2836,14 +3180,20 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 			int oldValue = info.oldIntValue;
 			if (info.controlID == ID_OFFSET_X_INPUT)
 			{
-				offsetXInput->ChangeValue(wxString::Format("%i", oldValue));
-				selectedObject->displacementX = (unsigned char) oldValue;
+				object->displacementX = (unsigned char) oldValue;
+				if (objectIsSelected)
+				{
+					offsetXInput->ChangeValue(wxString::Format("%i", oldValue));
+				}
 				statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Offset X\" change"));
 			}
 			else if (info.controlID == ID_OFFSET_Y_INPUT)
 			{
-				offsetYInput->ChangeValue(wxString::Format("%i", oldValue));
-				selectedObject->displacementY = (unsigned char) oldValue;
+				object->displacementY = (unsigned char) oldValue;
+				if (objectIsSelected)
+				{
+					offsetYInput->ChangeValue(wxString::Format("%i", oldValue));
+				}
 				statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Offset Y\" change"));
 			}
 		}
@@ -2851,8 +3201,11 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 
 		case ELEVATION_CHANGE:
 		{
-			elevationInput->ChangeValue(wxString::Format("%i", info.oldIntValue));
-			selectedObject->elevation = (unsigned char) info.oldIntValue;
+			object->elevation = (unsigned char) info.oldIntValue;
+			if (objectIsSelected)
+			{
+				elevationInput->ChangeValue(wxString::Format("%i", info.oldIntValue));
+			}
 			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "\"Elevation\" change"));
 		}
 		break;
@@ -2861,30 +3214,27 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		{
 			if (isPreviewAnimationOn) stopAnimationPreview();
 
-			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
-			auto objects = DatSprReaderWriter::getInstance().getObjects(category);
-			auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(category);
-			unsigned int id = info.oldIntValue;
-			unsigned int index = id - (category == CategoryItem ? 100 : 1);
+			auto objects = DatSprReaderWriter::getInstance().getObjects(cat);
+			auto & attrs = AdvancedAttributesManager::getInstance().getCategoryAttributes(cat);
 
 			// remapping advanced attributes first
-			unsigned int attrsID = id, endID = id + (objects->size() - index) + 1;
+			unsigned int attrsID = objID, endID = objID + (objects->size() - index) + 1;
 			for (unsigned int aid = endID; aid > attrsID; --aid)
 			{
 				attrs[aid] = attrs[aid - 1];
 			}
-			attrs[attrsID] = deletedAttrsByCatAndId[category][attrsID];
+			attrs[attrsID] = deletedAttrsByCatAndId[cat][attrsID];
 
 			// then inserting deleted object back
-			objects->insert(objects->begin() + index, deletedObjectsByCatAndId[category][id]);
+			objects->insert(objects->begin() + index, deletedObjectsByCatAndId[cat][objID]);
 			unsigned int idx = index;
 			while (idx < objects->size())
 			{
-				objects->at(idx++)->id = id++; // reindexing IDs
+				objects->at(idx++)->id = objID++; // reindexing IDs
 			}
 
 			// selecting restored object if we're still in same category
-			if (category == currentCategory)
+			if (cat == currentCategory)
 			{
 				selectedObject = objects->at(index);
 
@@ -2904,23 +3254,33 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 		break;
 
 		case ADVANCED_ATTRS_CHANGE:
+		case ANIM_FRAME_TIME_CHANGE:
 		{
-			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
-			unsigned int id = info.oldIntValue;
-			AdvancedAttributesManager::getInstance().setAttributes(category, id, savedAttrsByCatAndId[category][id]);
-			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "advanced attributes modification"));
+			auto attrs = savedAttrsByCatAndId[cat][objID];
+			AdvancedAttributesManager::getInstance().setAttributes(cat, objID, attrs);
+			if (info.operationID == ADVANCED_ATTRS_CHANGE)
+			{
+				statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "advanced attributes modification"));
+			}
+			else if (info.operationID == ANIM_FRAME_TIME_CHANGE)
+			{
+				if (objectIsSelected && currentXDiv == (unsigned int) info.orientaionID &&
+				    currentFrame == (unsigned int) info.frameID)
+				{
+					setFrameTimeInputValue();
+				}
+				statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "frame time change"));
+			}
 		}
 		break;
 
 		case SPRITE_INSERTION:
 		{
-			auto sprites = DatSprReaderWriter::getInstance().getSprites();
+			auto sprites = dsrw.getSprites();
 			deletedSprites[info.newIntValue] = addedSprites[info.newIntValue];
 			sprites->erase(sprites->find(addedSprites[info.newIntValue]->id));
 
-			DatObjectCategory category = (DatObjectCategory) info.categoryID;
-			unsigned int id = info.objectID;
-			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			if (objectIsSelected)
 			{
 				fillObjectSprites();
 				fillAnimationSprites();
@@ -2932,13 +3292,9 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 
 		case ANIM_SPRITE_CHANGE:
 		{
-			DatObjectCategory category = (DatObjectCategory) info.categoryID;
-			auto objects = DatSprReaderWriter::getInstance().getObjects(category);
-			unsigned int id = info.objectID;
-			unsigned int index = id - (info.categoryID == CategoryItem ? 100 : 1);
-			auto obj = objects->at(index);
-			obj->spriteIDs[info.spriteID] = info.oldIntValue;
-			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			object->spriteIDs[info.spriteID] = info.oldIntValue;
+
+			if (objectIsSelected)
 			{
 				fillObjectSprites();
 				fillAnimationSprites();
@@ -2950,11 +3306,12 @@ void MainWindow::OnUndo(wxCommandEvent & event)
 
 		case SPRITE_BLOCKING_CHANGE:
 		{
-			DatSprReaderWriter::getInstance().getSprites()->at(info.spriteID)->isBlocking = info.oldIntValue != 0;
-			if ((unsigned int) info.objectID == selectedObject->id)
+			dsrw.getSprites()->at(info.spriteID)->isBlocking = info.oldIntValue != 0;
+			if (objectIsSelected)
 			{
 				fillAnimationSprites();
 			}
+			statusBar->SetStatusText(wxString::Format(UNDONE_MSG, "sprite 'blocking' state change"));
 		}
 		break;
 
@@ -2979,70 +3336,109 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 {
 	OperationInfo info = redoStack.top();
 	
+	auto & dsrw = DatSprReaderWriter::getInstance();
+	DatObjectCategory cat = (DatObjectCategory) info.categoryID;
+	unsigned int objID = info.objectID;
+	auto objects = dsrw.getObjects(cat);
+	unsigned int index = objID - (cat == CategoryItem ? 100 : 1);
+	auto object = objects->at(index);
+	bool objectIsSelected = (cat == currentCategory && selectedObject && objID == selectedObject->id);
+
 	switch (info.operationID)
 	{
 		case ANIM_WIDTH_CHANGE:
 		{
-			animationWidthInput->SetValue(info.newIntValue);
-			selectedObject->width = (unsigned char) info.newIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->width = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				animationWidthInput->SetValue(info.newIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "animation width change"));
 		}
 		break;
 
 		case ANIM_HEIGHT_CHANGE:
 		{
-			animationHeightInput->SetValue(info.newIntValue);
-			selectedObject->height = (unsigned char) info.newIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->height = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				animationHeightInput->SetValue(info.newIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "animation height change"));
 		}
 		break;
 
 		case PATTERN_WIDTH_CHANGE:
 		{
-			patternWidthInput->SetValue(info.newIntValue);
-			selectedObject->patternWidth = (unsigned char) info.newIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->patternWidth = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(object);
+			resizeFrameTimesArray(cat, objID);
+
+			if (objectIsSelected)
+			{
+				patternWidthInput->SetValue(info.newIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "pattern width change"));
 		}
 		break;
 
 		case PATTERN_HEIGHT_CHANGE:
 		{
-			patternHeightInput->SetValue(info.newIntValue);
-			selectedObject->patternHeight = (unsigned char) info.newIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->patternHeight = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				patternHeightInput->SetValue(info.newIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "pattern height change"));
 		}
 		break;
 
 		case LAYERS_COUNT_CHANGE:
 		{
-			layersCountInput->SetValue(info.newIntValue);
-			selectedObject->layersCount = (unsigned char) info.newIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->layersCount = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				layersCountInput->SetValue(info.newIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "layers count change"));
 		}
 		break;
 
 		case AMOUNT_OF_FRAMES_CHANGE:
 		{
-			amountOfFramesInput->SetValue(info.newIntValue);
-			selectedObject->phasesCount = (unsigned char) info.newIntValue;
-			resizeObjectSpriteIDsArray(selectedObject);
-			buildAnimationSpriteHolders();
-			fillAnimationSprites();
+			object->phasesCount = (unsigned char) info.newIntValue;
+			resizeObjectSpriteIDsArray(object);
+
+			if (objectIsSelected)
+			{
+				amountOfFramesInput->SetValue(info.newIntValue);
+				buildAnimationSpriteHolders();
+				fillAnimationSprites();
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "amount of frames change"));
 		}
 		break;
@@ -3050,8 +3446,13 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case ALWAYS_ANIMATED_TOGGLE:
 		{
 			bool value = info.newIntValue != 0;
-			alwaysAnimatedCheckbox->SetValue(value);
-			selectedObject->isAlwaysAnimated = value;
+			object->isAlwaysAnimated = value;
+
+			if (objectIsSelected)
+			{
+				alwaysAnimatedCheckbox->SetValue(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Always animated\" attribute toggle"));
 		}
 		break;
@@ -3059,8 +3460,13 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case BOOLEAN_ATTR_TOGGLE:
 		{
 			bool value = info.newIntValue != 0;
-			booleanAttrCheckboxes[info.controlID]->SetValue(value);
-			changeBooleanAttribute(info.controlID, value);
+			changeBooleanAttribute(object, info.controlID, value);
+
+			if (objectIsSelected)
+			{
+				booleanAttrCheckboxes[info.controlID]->SetValue(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         booleanAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -3069,12 +3475,16 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case FULL_GROUND_TOGGLE:
 		{
 			bool value = info.newIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			groundSpeedLabel->Enable(value);
-			groundSpeedInput->Enable(value);
-			selectedObject->isGround = selectedObject->isFullGround = value;
-			selectedObject->allAttrs[AttrGround] = selectedObject->allAttrs[AttrFullGround] = value;
-			selectedObject->groundSpeed = value ? wxAtoi(groundSpeedInput->GetValue()) : 0;
+			object->isGround = object->isFullGround = value;
+			object->allAttrs[AttrGround] = object->allAttrs[AttrFullGround] = value;
+
+			if (objectIsSelected)
+			{
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				groundSpeedLabel->Enable(value);
+				groundSpeedInput->Enable(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -3083,24 +3493,18 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case HAS_LIGHT_TOGGLE:
 		{
 			bool value = info.newIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			lightColorLabel->Enable(value);
-			lightColorPicker->Enable(value);
-			lightIntensityLabel->Enable(value);
-			lightIntensityInput->Enable(value);
-			selectedObject->isLightSource = value;
-			selectedObject->allAttrs[AttrLight] = value;
-			const wxColour & color = lightColorPicker->GetColour();
-			if (value)
+			object->isLightSource = value;
+			object->allAttrs[AttrLight] = value;
+
+			if (objectIsSelected)
 			{
-				selectedObject->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
-																	 + floor(color.Blue() / 0x33);
-				selectedObject->lightIntensity = wxAtoi(lightIntensityInput->GetValue());
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				lightColorLabel->Enable(value);
+				lightColorPicker->Enable(value);
+				lightIntensityLabel->Enable(value);
+				lightIntensityInput->Enable(value);
 			}
-			else
-			{
-				selectedObject->lightColor = selectedObject->lightIntensity = 0;
-			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -3109,22 +3513,18 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case HAS_OFFSET_TOGGLE:
 		{
 			bool value = info.newIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			offsetXLabel->Enable(value);
-			offsetXInput->Enable(value);
-			offsetYLabel->Enable(value);
-			offsetYInput->Enable(value);
-			selectedObject->hasDisplacement = value;
-			selectedObject->allAttrs[AttrDisplacement] = value;
-			if (value)
+			object->hasDisplacement = value;
+			object->allAttrs[AttrDisplacement] = value;
+
+			if (objectIsSelected)
 			{
-				selectedObject->displacementX = wxAtoi(offsetXInput->GetValue());
-				selectedObject->displacementY = wxAtoi(offsetYInput->GetValue());
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				offsetXLabel->Enable(value);
+				offsetXInput->Enable(value);
+				offsetYLabel->Enable(value);
+				offsetYInput->Enable(value);
 			}
-			else
-			{
-				selectedObject->displacementX = selectedObject->displacementY = 0;
-			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -3133,12 +3533,16 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case HAS_ELEVATION_TOGGLE:
 		{
 			bool value = info.newIntValue != 0;
-			valueAttrCheckboxes[info.controlID]->SetValue(value);
-			elevationLabel->Enable(value);
-			elevationInput->Enable(value);
-			selectedObject->isRaised = value;
-			selectedObject->allAttrs[AttrElevation] = value;
-			selectedObject->elevation = value ? wxAtoi(elevationInput->GetValue()) : 0;
+			object->isRaised = value;
+			object->allAttrs[AttrElevation] = value;
+
+			if (objectIsSelected)
+			{
+				valueAttrCheckboxes[info.controlID]->SetValue(value);
+				elevationLabel->Enable(value);
+				elevationInput->Enable(value);
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, wxString::Format("\"%s\" attribute toggle",
 			                         valueAttrCheckboxes[info.controlID]->GetLabel())));
 		}
@@ -3146,8 +3550,11 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 
 		case GROUND_SPEED_CHANGE:
 		{
-			groundSpeedInput->ChangeValue(wxString::Format("%i", info.newIntValue));
-			selectedObject->groundSpeed = (unsigned char) info.newIntValue;
+			object->groundSpeed = (unsigned char) info.newIntValue;
+			if (objectIsSelected)
+			{
+				groundSpeedInput->ChangeValue(wxString::Format("%i", info.newIntValue));
+			}
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Ground speed\" change"));
 		}
 		break;
@@ -3155,18 +3562,26 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 		case LIGHT_COLOR_CHANGE:
 		{
 			wxColour color(info.newIntValue);
-			lightColorPicker->SetColour(color);
-			lastLightColorValue = color;
-			selectedObject->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
+			object->lightColor = floor(color.Red() / 0x33) * 36 + floor(color.Green() / 0x33) * 6
 			                           + floor(color.Blue() / 0x33);
+
+			if (objectIsSelected)
+			{
+				lightColorPicker->SetColour(color);
+				lastLightColorValue = color;
+			}
+
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Light color\" change"));
 		}
 		break;
 
 		case LIGHT_INTENSITY_CHANGE:
 		{
-			lightIntensityInput->ChangeValue(wxString::Format("%i", info.newIntValue));
-			selectedObject->lightIntensity = (unsigned char) info.newIntValue;
+			object->lightIntensity = (unsigned char) info.newIntValue;
+			if (objectIsSelected)
+			{
+				lightIntensityInput->ChangeValue(wxString::Format("%i", info.newIntValue));
+			}
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Light intensity\" change"));
 		}
 		break;
@@ -3176,14 +3591,20 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 			int newValue = info.newIntValue;
 			if (info.controlID == ID_OFFSET_X_INPUT)
 			{
-				offsetXInput->ChangeValue(wxString::Format("%i", newValue));
-				selectedObject->displacementX = (unsigned char) newValue;
+				object->displacementX = (unsigned char) newValue;
+				if (objectIsSelected)
+				{
+					offsetXInput->ChangeValue(wxString::Format("%i", newValue));
+				}
 				statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Offset X\" change"));
 			}
 			else if (info.controlID == ID_OFFSET_Y_INPUT)
 			{
-				offsetYInput->ChangeValue(wxString::Format("%i", newValue));
-				selectedObject->displacementY = (unsigned char) newValue;
+				object->displacementY = (unsigned char) newValue;
+				if (objectIsSelected)
+				{
+					offsetYInput->ChangeValue(wxString::Format("%i", newValue));
+				}
 				statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Offset Y\" change"));
 			}
 		}
@@ -3191,38 +3612,49 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 
 		case ELEVATION_CHANGE:
 		{
-			elevationInput->ChangeValue(wxString::Format("%i", info.newIntValue));
-			selectedObject->elevation = (unsigned char) info.newIntValue;
+			object->elevation = (unsigned char) info.newIntValue;
+			if (objectIsSelected)
+			{
+				elevationInput->ChangeValue(wxString::Format("%i", info.newIntValue));
+			}
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "\"Elevation\" change"));
 		}
 		break;
 
 		case OBJECT_DELETION:
 		{
-			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
-			unsigned int id = info.oldIntValue;
-			processObjectDeletion(category, id);
+			processObjectDeletion(cat, objID);
 			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "object deletion"));
 		}
 		break;
 
 		case ADVANCED_ATTRS_CHANGE:
+		case ANIM_FRAME_TIME_CHANGE:
 		{
-			DatObjectCategory category = (DatObjectCategory) info.newIntValue;
-			unsigned int id = info.oldIntValue;
-			AdvancedAttributesManager::getInstance().setAttributes(category, id, changedAttrsByCatAndId[category][id]);
-			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "advanced attributes modification"));
+			auto attrs = changedAttrsByCatAndId[cat][objID];
+			AdvancedAttributesManager::getInstance().setAttributes(cat, objID, attrs);
+			if (info.operationID == ADVANCED_ATTRS_CHANGE)
+			{
+				statusBar->SetStatusText(wxString::Format(REDONE_MSG, "advanced attributes modification"));
+			}
+			else if (info.operationID == ANIM_FRAME_TIME_CHANGE)
+			{
+				if (objectIsSelected && currentXDiv == (unsigned int) info.orientaionID &&
+				    currentFrame == (unsigned int) info.frameID)
+				{
+					setFrameTimeInputValue();
+				}
+				statusBar->SetStatusText(wxString::Format(REDONE_MSG, "frame time change"));
+			}
 		}
 		break;
 
 		case SPRITE_INSERTION:
 		{
-			auto sprites = DatSprReaderWriter::getInstance().getSprites();
+			auto sprites = dsrw.getSprites();
 			(*sprites)[info.newIntValue] = deletedSprites[info.newIntValue];
 
-			DatObjectCategory category = (DatObjectCategory) info.categoryID;
-			unsigned int id = info.objectID;
-			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			if (objectIsSelected)
 			{
 				fillObjectSprites();
 				fillAnimationSprites();
@@ -3234,13 +3666,9 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 
 		case ANIM_SPRITE_CHANGE:
 		{
-			DatObjectCategory category = (DatObjectCategory) info.categoryID;
-			auto objects = DatSprReaderWriter::getInstance().getObjects(category);
-			unsigned int id = info.objectID;
-			unsigned int index = id - (info.categoryID == CategoryItem ? 100 : 1);
-			auto obj = objects->at(index);
-			obj->spriteIDs[info.spriteID] = info.newIntValue;
-			if (category == currentCategory && selectedObject && id == selectedObject->id)
+			object->spriteIDs[info.spriteID] = info.newIntValue;
+
+			if (objectIsSelected)
 			{
 				fillObjectSprites();
 				fillAnimationSprites();
@@ -3252,11 +3680,12 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 
 		case SPRITE_BLOCKING_CHANGE:
 		{
-			DatSprReaderWriter::getInstance().getSprites()->at(info.spriteID)->isBlocking = info.newIntValue != 0;
-			if ((unsigned int) info.objectID == selectedObject->id)
+			dsrw.getSprites()->at(info.spriteID)->isBlocking = info.newIntValue != 0;
+			if (objectIsSelected)
 			{
 				fillAnimationSprites();
 			}
+			statusBar->SetStatusText(wxString::Format(REDONE_MSG, "sprite 'blocking' state change"));
 		}
 		break;
 

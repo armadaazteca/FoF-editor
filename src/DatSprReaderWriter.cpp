@@ -3,6 +3,7 @@
 #include <wx/wx.h>
 #include <wx/memory.h>
 #endif
+#include "Settings.h"
 #include "DatSprReaderWriter.h"
 
 DatSprReaderWriter & DatSprReaderWriter::getInstance()
@@ -26,10 +27,19 @@ void DatSprReaderWriter::initNewData()
 
 bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
+	lastError = ERROR_UNKNOWN;
 	file.open(filename.mb_str(), ios::in | ios::binary);
 	if (file.is_open())
 	{
 		datSignature = readU32();
+
+		bool validateSignatures = Settings::getInstance().get("validateSignatures").IsSameAs("yes");
+		if (validateSignatures && (datSignature != DEFAULT_DAT_SIGNATURE))
+		{
+			lastError = ERROR_INVALID_SIGNATURE;
+			return false;
+		}
+
 		itemsCount = readU16();
 		creaturesCount = readU16();
 		effectsCount = readU16();
@@ -236,10 +246,19 @@ bool DatSprReaderWriter::readDat(const wxString & filename, ProgressUpdatable * 
 
 bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
+	lastError = ERROR_UNKNOWN;
 	file.open(filename.mb_str(), ios::in | ios::binary);
 	if (file.is_open())
 	{
 		sprSignature = readU32();
+
+		bool validateSignatures = Settings::getInstance().get("validateSignatures").IsSameAs("yes");
+		if (validateSignatures && (sprSignature != DEFAULT_SPR_SIGNATURE))
+		{
+			lastError = ERROR_INVALID_SIGNATURE;
+			return false;
+		}
+
 		unsigned int spritesCount = readU32();
 		sprites = make_shared <SpriteMap> ();
 		shared_ptr <Sprite> sprite = nullptr;
@@ -332,10 +351,19 @@ bool DatSprReaderWriter::readSpr(const wxString & filename, ProgressUpdatable * 
 
 bool DatSprReaderWriter::readBlockingStates(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
+	lastError = ERROR_UNKNOWN;
 	file.open(filename.mb_str(), ios::in | ios::binary);
 	if (file.is_open())
 	{
-		readU32(); // skipping signature
+		unsigned int signature = readU32();
+
+		bool validateSignatures = Settings::getInstance().get("validateSignatures").IsSameAs("yes");
+		if (validateSignatures && (signature != DEFAULT_SPR_SIGNATURE))
+		{
+			lastError = ERROR_INVALID_SIGNATURE;
+			return false;
+		}
+
 		unsigned int total = readU32();
 		unsigned int id = 0, readings = 0;
 		for (unsigned int i = 0; i < total; ++i)
@@ -361,10 +389,19 @@ bool DatSprReaderWriter::readBlockingStates(const wxString & filename, ProgressU
 
 bool DatSprReaderWriter::readAlpha(const wxString & filename, ProgressUpdatable * progressUpdatable)
 {
+	lastError = ERROR_UNKNOWN;
 	file.open(filename.mb_str(), ios::in | ios::binary);
 	if (file.is_open())
 	{
-		readU32(); // skipping signature
+		unsigned int signature = readU32();
+
+		bool validateSignatures = Settings::getInstance().get("validateSignatures").IsSameAs("yes");
+		if (validateSignatures && (signature != DEFAULT_SPR_SIGNATURE))
+		{
+			lastError = ERROR_INVALID_SIGNATURE;
+			return false;
+		}
+
 		unsigned int spritesCount = readU32();
 		unsigned int id = 0, readings = 0;
 		int currentOffset = 0;

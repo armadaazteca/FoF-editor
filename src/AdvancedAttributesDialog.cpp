@@ -135,35 +135,40 @@ AdvancedAttributesDialog::AdvancedAttributesDialog(wxWindow * parent, DatObjectC
 
 void AdvancedAttributesDialog::OnClickSaveButton(wxCommandEvent & event)
 {
-	auto attributes = make_shared <AdvancedObjectAttributes> ();
+	auto & aam = AdvancedAttributesManager::getInstance();
+	auto attrs = aam.getAttributes(objCat, objID);
+	if (!attrs)
+	{
+		attrs = make_shared <AdvancedObjectAttributes> ();
+	}
 	const wxString & nameStr = nameText->GetValue();
 	char * name = new char[nameStr.Length() + 1];
 	strcpy(name, nameStr.c_str());
-	attributes->name.reset(name);
+	attrs->name.reset(name);
 
 	if (objCat == CategoryItem)
 	{
-		attributes->group = groupCombo->GetSelection();
+		attrs->group = groupCombo->GetSelection();
 
 		const wxString & descStr = descriptionText->GetValue();
 		char * description = new char[descStr.Length() + 1];
 		strcpy(description, descStr.c_str());
-		attributes->description.reset(description);
+		attrs->description.reset(description);
 
-		if (articleARb->GetValue()) attributes->article = ARTICLE_A;
-		if (articleAnRb->GetValue()) attributes->article = ARTICLE_AN;
+		if (articleARb->GetValue()) attrs->article = ARTICLE_A;
+		if (articleAnRb->GetValue()) attrs->article = ARTICLE_AN;
 
-		if (floorChangeNoneRb->GetValue()) attributes->floorChange = FLOOR_CHANGE_NONE;
-		if (floorChangeDownRb->GetValue()) attributes->floorChange = FLOOR_CHANGE_DOWN;
-		if (floorChangeUpRb->GetValue()) attributes->floorChange = FLOOR_CHANGE_UP;
+		if (floorChangeNoneRb->GetValue()) attrs->floorChange = FLOOR_CHANGE_NONE;
+		if (floorChangeDownRb->GetValue()) attrs->floorChange = FLOOR_CHANGE_DOWN;
+		if (floorChangeUpRb->GetValue()) attrs->floorChange = FLOOR_CHANGE_UP;
 	}
 	else if (objCat == CategoryCreature)
 	{
-		if (typeMonsterRb->GetValue()) attributes->creatureType = CREATURE_MONSTER;
-		if (typeNPCRb->GetValue()) attributes->creatureType = CREATURE_NPC;
+		if (typeMonsterRb->GetValue()) attrs->creatureType = CREATURE_MONSTER;
+		if (typeNPCRb->GetValue()) attrs->creatureType = CREATURE_NPC;
 	}
 
-	AdvancedAttributesManager::getInstance().setAttributes(objCat, objID, attributes);
+	AdvancedAttributesManager::getInstance().setAttributes(objCat, objID, attrs);
 
 	Close();
 

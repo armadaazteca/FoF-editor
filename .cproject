@@ -26,6 +26,7 @@
 								<option id="gnu.cpp.compiler.option.include.paths.1657237171" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="/usr/local/lib/wx/include/gtk2-unicode-3.0"/>
 									<listOptionValue builtIn="false" value="/usr/local/include/wx-3.0"/>
+									<listOptionValue builtIn="false" value="/usr/include/ImageMagick"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.641754927" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__WXGTK__"/>
@@ -94,8 +95,9 @@
 								<option id="gnu.cpp.compiler.exe.release.option.optimization.level.1760106409" name="Optimization Level" superClass="gnu.cpp.compiler.exe.release.option.optimization.level" value="gnu.cpp.compiler.optimization.level.most" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.exe.release.option.debugging.level.814248648" name="Debug Level" superClass="gnu.cpp.compiler.exe.release.option.debugging.level" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.include.paths.792333177" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="${GTK_INCLUDE}"/>
-									<listOptionValue builtIn="false" value="${WX_INCLUDE}"/>
+									<listOptionValue builtIn="false" value="/usr/local/lib/wx/include/gtk2-unicode-3.0"/>
+									<listOptionValue builtIn="false" value="/usr/local/include/wx-3.0"/>
+									<listOptionValue builtIn="false" value="/usr/include/ImageMagick"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1333472861" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__WXGTK__"/>
@@ -133,10 +135,10 @@
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
-		<configuration configurationName="Release">
+		<configuration configurationName="Debug">
 			<resource resourceType="PROJECT" workspacePath="/NewEditor"/>
 		</configuration>
-		<configuration configurationName="Debug">
+		<configuration configurationName="Release">
 			<resource resourceType="PROJECT" workspacePath="/NewEditor"/>
 		</configuration>
 	</storageModule>

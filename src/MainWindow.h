@@ -91,6 +91,7 @@ private:
 		ID_PREV_LAYER_BUTTON,
 		ID_NEXT_LAYER_BUTTON,
 		ID_FRAMES_AMOUNT_INPUT,
+		ID_FRAME_TIME_INPUT,
 		ID_ALWAYS_ANIMATED_CHECKBOX,
 		ID_BLEND_LAYERS_CHECKBOX,
 		ID_PREVIEW_ANIMATION_BUTTON,
@@ -130,6 +131,7 @@ private:
 		// context menu IDs
 		ID_MENU_EXPORT_SPRITE,
 		ID_MENU_EXPORT_COMPOSED,
+		ID_MENU_EXPORT_ANIMATION,
 		ID_MENU_DELETE_SPRITE,
 		ID_MENU_TOGGLE_SPRITE_BLOCKING,
 		ID_MENU_TOGGLE_SPRITE_BLOCKING_ALL_FRAMES
@@ -150,9 +152,9 @@ private:
 	enum OperationID
 	{
 		ANIM_WIDTH_CHANGE, ANIM_HEIGHT_CHANGE, PATTERN_WIDTH_CHANGE, PATTERN_HEIGHT_CHANGE,
-		LAYERS_COUNT_CHANGE, AMOUNT_OF_FRAMES_CHANGE, ALWAYS_ANIMATED_TOGGLE, BOOLEAN_ATTR_TOGGLE,
-		FULL_GROUND_TOGGLE, GROUND_SPEED_CHANGE, HAS_LIGHT_TOGGLE, LIGHT_COLOR_CHANGE, LIGHT_INTENSITY_CHANGE,
-		HAS_OFFSET_TOGGLE, OFFSET_XY_CHANGE, HAS_ELEVATION_TOGGLE, ELEVATION_CHANGE,
+		LAYERS_COUNT_CHANGE, AMOUNT_OF_FRAMES_CHANGE, ANIM_FRAME_TIME_CHANGE, ALWAYS_ANIMATED_TOGGLE,
+		BOOLEAN_ATTR_TOGGLE, FULL_GROUND_TOGGLE, GROUND_SPEED_CHANGE, HAS_LIGHT_TOGGLE, LIGHT_COLOR_CHANGE,
+		LIGHT_INTENSITY_CHANGE, HAS_OFFSET_TOGGLE, OFFSET_XY_CHANGE, HAS_ELEVATION_TOGGLE, ELEVATION_CHANGE,
 		OBJECT_DELETION, OBJECT_CREATION, ADVANCED_ATTRS_CHANGE, SPRITE_INSERTION, SPRITE_BLOCKING_CHANGE,
 		ANIM_SPRITE_CHANGE, OPERATION_NONE
 	};
@@ -162,8 +164,10 @@ private:
 		OperationID operationID = OPERATION_NONE;
 		int oldIntValue = 0, newIntValue = 0;
 		wxString oldStrValue, newStrValue;
-		bool chainedUndo = false, chainedRedo = false; // whether this operation chained with other undos to rollback several at once
-		int controlID = 0, categoryID = 0, objectID = 0, spriteID = 0; // various related IDs
+		// whether this operation chained with other undos to rollback several at once
+		bool chainedUndo = false, chainedRedo = false;
+		// various related IDs
+		int controlID = 0, categoryID = 0, objectID = 0, orientaionID = 0, frameID = 0, spriteID = 0;
 	};
 
 	bool isDirty = false; // whether editor data has been modified
@@ -195,6 +199,7 @@ private:
 	wxSpinCtrl * layersCountInput = nullptr;
 	wxStaticText * currentLayerNumber = nullptr;
 	wxSpinCtrl * amountOfFramesInput = nullptr;
+	wxTextCtrl * frameTimeInput = nullptr;
 	wxCheckBox * alwaysAnimatedCheckbox = nullptr, * blendLayersCheckbox = nullptr;
 	wxSpinCtrl * previewFpsInput = nullptr;
 	wxCheckBox * drawBlockingMarksCheckbox = nullptr;
@@ -213,8 +218,8 @@ private:
 	wxBitmap emptyBitmap;
 	unique_ptr <unsigned char[]> stubImageRgb = nullptr;
 	unique_ptr <unsigned char[]> stubImageAlpha = nullptr;
-	int amountOfFrames = 0;
 	bool isPreviewAnimationOn = false, doDrawBlockingMarks = true;
+	int previewFrameTime = 0;
 
 	vector <shared_ptr <wxImage>> importedSprites;
 	vector <EditorSpriteIDs *> editorSpriteIDs;
@@ -248,6 +253,7 @@ private:
 	void OnClickNextLayerButton(wxCommandEvent & event);
 	void OnClickPrevFrameButton(wxCommandEvent & event);
 	void OnClickNextFrameButton(wxCommandEvent & event);
+	void OnFrameTimeChanged(wxFocusEvent & event);
 	void OnPreviewFPSChanged(wxSpinEvent & event);
 	void OnClickPreviewAnimationButton(wxCommandEvent & event);
 	void OnPreviewTimerEvent(wxTimerEvent & event);
@@ -286,18 +292,21 @@ private:
 	void OnAbout(wxCommandEvent & event);
 	void OnExportSpriteMenu(wxCommandEvent & event);
 	void OnExportComposedFrameMenu(wxCommandEvent & event);
+	void OnExportAnimationMenu(wxCommandEvent & event);
 	void OnDeleteSpriteMenu(wxCommandEvent & event);
 	void OnToggleSpriteBlockingMenu(wxCommandEvent & event);
 	void OnToggleSpriteBlockingAllFramesMenu(wxCommandEvent & event);
 	void OnAutobackupProcessed(wxCommandEvent & event);
 	unsigned int getSpriteIdIndexOfAnimGridBitmap(wxGenericStaticBitmap * animGridBitmap);
+	void toggleSpriteBlocking(bool chainedUndo);
 	bool checkDirty();
 	void fillObjectsListBox(unsigned int selectedIndex = 0);
 	void setAttributeValues(bool isNewObject = false);
-	bool changeBooleanAttribute(int id, bool value);
+	bool changeBooleanAttribute(shared_ptr <DatObject> object, int controlID, bool value);
 	void fillObjectSprites();
 	void fillAnimationSection(bool resetIterators = true);
 	void fillAnimationSprites();
+	void composeFrame(unsigned char * resultRGB, unsigned char * resultAlpha, const wxColour & bgColor = wxNullColour);
 	void fillBitmapBuffers(unsigned char ** bitmapsRGB, unsigned char ** bitmapsAlpha);
 	void blendBitmapBuffers(unsigned char * destRGB, unsigned char * destAlpha,
 	                        unsigned char * srcRGB, unsigned char * srcAlpha,
@@ -307,9 +316,13 @@ private:
 	                        unsigned int srcHeight = Config::SPRITE_SIZE,
 	                        unsigned int xOffset = 0, unsigned int yOffset = 0);
 	void buildAnimationSpriteHolders();
+	unsigned int getFrameTime(DatObjectCategory category = InvalidCategory, int objectID = -1,
+	                          int xDiv = -1, int frame = -1);
+	void setFrameTimeInputValue();
 	void drawAnimationSpriteSelection(wxGenericStaticBitmap * animGridBitmap);
 	void clearAnimationSpriteSelection(wxGenericStaticBitmap * animGridBitmap);
 	void resizeObjectSpriteIDsArray(shared_ptr <DatObject> object);
+	void resizeFrameTimesArray(DatObjectCategory category, unsigned int id);
 	void deleteSelectedObject();
 	pair <shared_ptr <DatObject>, shared_ptr <AdvancedObjectAttributes>>
 	processObjectDeletion(DatObjectCategory category, unsigned int id);

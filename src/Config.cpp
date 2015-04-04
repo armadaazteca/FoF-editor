@@ -6,3 +6,4 @@ const wxString & Config::VERSION_STRING = wxString::Format("%i.%i.%i", Config::M
 const wxString & Config::ERROR_TITLE = "Error";
 const wxString & Config::COMMON_READ_ERROR = "The %s file cannot be read";
 const wxString & Config::COMMON_WRITE_ERROR = "The %s file cannot be written";
+const wxString & Config::INVALID_SIGNATURE_ERROR = "The %s file has invalid signature (must be %#010x)";

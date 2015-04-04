@@ -1,12 +1,6 @@
 For v1.0:
-- update 'Quick guide', describe 'blocking' states
-- signature validation
-- implement 'blocking' sprites toggle for all frames on animation
-- verify current object for all undo / redo operations
+- settings for animation background color and excluding first frame
 
 Minor bugs:
 - get rid of all memory leaks (detected in VS, particularly with JSON stuff)
 - wheel-scrolling for objects listbox (works in Windows now, but doesn't work in Linux)
-
-Really future work:
-- possibly export whole animation in .gif or other format

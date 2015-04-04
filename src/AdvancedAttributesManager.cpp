@@ -5,9 +5,12 @@
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
 #include <string>
+#include <vector>
 #include "jsoncpp/json.h"
 #include "Events.h"
 #include "AdvancedAttributesManager.h"
+
+const string & EMPTY_STR = "";
 
 AdvancedAttributesManager & AdvancedAttributesManager::getInstance()
 {
@@ -34,6 +37,43 @@ void AdvancedAttributesManager::removeAttributes(DatObjectCategory category, uns
 {
 	auto cat = allAttributes[category];
 	cat.erase(cat.find(objectID));
+}
+
+shared_ptr <AdvancedObjectAttributes>
+AdvancedAttributesManager::makeAttrsCopy(shared_ptr <AdvancedObjectAttributes> attrs)
+{
+	if (!attrs) return shared_ptr <AdvancedObjectAttributes> (nullptr);
+
+	auto copy = make_shared <AdvancedObjectAttributes> ();
+	copy->group = attrs->group;
+
+	if (attrs->name)
+	{
+		auto name = new char[strlen(attrs->name.get()) + 1];
+		strcpy(name, attrs->name.get());
+		copy->name = unique_ptr <char[]> (name);
+	}
+
+	if (attrs->description)
+	{
+		auto description = new char[strlen(attrs->description.get()) + 1];
+		strcpy(description, attrs->description.get());
+		copy->description = unique_ptr <char[]> (description);
+	}
+
+	if (attrs->frameTimesLen)
+	{
+		auto frameTimes = new unsigned int[attrs->frameTimesLen];
+		memcpy(frameTimes, attrs->frameTimes.get(), sizeof(unsigned int) * attrs->frameTimesLen);
+		copy->frameTimes = unique_ptr <unsigned int[]> (frameTimes);
+		copy->frameTimesLen = attrs->frameTimesLen;
+	}
+
+	copy->article = attrs->article;
+	copy->floorChange = attrs->creatureType;
+	copy->creatureType = attrs->creatureType;
+
+	return copy;
 }
 
 bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatable * progressUpdatable)
@@ -76,6 +116,18 @@ bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatabl
 			attrs->description.reset(description);
 			attrs->article = attrsElem["article"].asUInt();
 			attrs->floorChange = attrsElem["floorChange"].asUInt();
+			// reading frame times
+			Json::Value & frameTimesElem = attrsElem["frameTimes"];
+			if (frameTimesElem.isArray())
+			{
+				attrs->frameTimesLen = frameTimesElem.size();
+				attrs->frameTimes = unique_ptr <unsigned int[]> (new unsigned int[attrs->frameTimesLen]);
+				unsigned int i = 0;
+				for (auto & num : frameTimesElem)
+				{
+					attrs->frameTimes[i++] = num.asUInt();
+				}
+			}
 			itemAttributes[atoi(strID.c_str())] = attrs;
 
 			progressUpdatable->updateProgress(++readings / (double) total);
@@ -91,6 +143,18 @@ bool AdvancedAttributesManager::read(const wxString & filename, ProgressUpdatabl
 			strcpy(name, srcName);
 			attrs->name.reset(name);
 			attrs->creatureType = attrsElem["creatureType"].asUInt();
+			// reading frame times
+			Json::Value & frameTimesElem = attrsElem["frameTimes"];
+			if (frameTimesElem.isArray())
+			{
+				attrs->frameTimesLen = frameTimesElem.size();
+				attrs->frameTimes = unique_ptr <unsigned int[]> (new unsigned int[attrs->frameTimesLen]);
+				unsigned int i = 0;
+				for (auto & num : frameTimesElem)
+				{
+					attrs->frameTimes[i++] = num.asUInt();
+				}
+			}
 			creatureAttributes[atoi(strID.c_str())] = attrs;
 
 			progressUpdatable->updateProgress(++readings / (double) total);
@@ -121,12 +185,26 @@ bool AdvancedAttributesManager::save(const wxString & filename, ProgressUpdatabl
 		for (auto & kv : itemAttributes)
 		{
 			attrs = kv.second;
+			if (!attrs) continue;
 			Json::Value attrsElem;
 			attrsElem["group"] = attrs->group;
-			attrsElem["name"] = string(attrs->name.get());
-			attrsElem["description"] = string(attrs->description.get());
+			auto name = attrs->name.get(), desc = attrs->description.get();
+			attrsElem["name"] = name ? string(name) : EMPTY_STR;
+			attrsElem["description"] = desc ? string(desc) : EMPTY_STR;
 			attrsElem["article"] = attrs->article;
 			attrsElem["floorChange"] = attrs->floorChange;
+			auto fta = attrs->frameTimes.get();
+			auto ftl = attrs->frameTimesLen;
+			if (fta && ftl)
+			{
+				// saving frame times in array element
+				Json::Value frameTimesElem;
+				for (unsigned int i = 0; i < ftl; ++i)
+				{
+					frameTimesElem[i] = fta[i];
+				}
+				attrsElem["frameTimes"] = frameTimesElem;
+			}
 			sprintf(strID, "%i", kv.first);
 			itemAttrs[strID] = attrsElem;
 
@@ -137,9 +215,23 @@ bool AdvancedAttributesManager::save(const wxString & filename, ProgressUpdatabl
 		for (auto & kv : creatureAttributes)
 		{
 			attrs = kv.second;
+			if (!attrs) continue;
 			Json::Value attrsElem;
-			attrsElem["name"] = string(attrs->name.get());
+			auto name = attrs->name.get();
+			attrsElem["name"] = name ? string(name) : EMPTY_STR;
 			attrsElem["creatureType"] = attrs->creatureType;
+			auto fta = attrs->frameTimes.get();
+			auto ftl = attrs->frameTimesLen;
+			if (fta && ftl)
+			{
+				// saving frame times in array element
+				Json::Value frameTimesElem;
+				for (unsigned int i = 0; i < ftl; ++i)
+				{
+					frameTimesElem[i] = fta[i];
+				}
+				attrsElem["frameTimes"] = frameTimesElem;
+			}
 			sprintf(strID, "%i", kv.first);
 			creatureAttrs[strID] = attrsElem;
 

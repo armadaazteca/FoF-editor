@@ -138,6 +138,8 @@ struct AdvancedObjectAttributes
 {
 	unsigned char group = 255; // non-existing group by default, should fallback to 'Other'
 	unique_ptr <char[]> name = nullptr, description = nullptr;
+	unique_ptr <unsigned int[]> frameTimes = nullptr;
+	unsigned int frameTimesLen = 0;
 	unsigned char article = ARTICLE_A, floorChange = FLOOR_CHANGE_NONE, creatureType = CREATURE_MONSTER;
 };
 

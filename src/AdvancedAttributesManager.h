@@ -18,6 +18,7 @@ public:
 	shared_ptr <AdvancedObjectAttributes> getAttributes(DatObjectCategory category, unsigned int objectID);
 	void setAttributes(DatObjectCategory category, unsigned int objectID, shared_ptr <AdvancedObjectAttributes> attrs);
 	void removeAttributes(DatObjectCategory category, unsigned int objectID);
+	shared_ptr <AdvancedObjectAttributes> makeAttrsCopy(shared_ptr <AdvancedObjectAttributes> attrs);
 	bool read(const wxString & filename, ProgressUpdatable * progressUpdatable);
 	bool save(const wxString & filename, ProgressUpdatable * progressUpdatable);
 

@@ -9,7 +9,7 @@ public:
 	static const wxString & APP_NAME;
 	static const int MAJOR_VERSION = 0;
 	static const int MINOR_VERSION = 9;
-	static const int BUILD_VERSION = 8;
+	static const int BUILD_VERSION = 9;
 	static const wxString & VERSION_STRING;
 	static const int SPRITE_SIZE = 32;
 	static const int MAIN_WINDOW_WIDTH = 1280;
@@ -22,7 +22,7 @@ public:
 	static const int MAX_PREVIEW_FPS = 30;
 	static const int OBJECTS_LIST_BOX_WHEEL_SCROLL_LINES = 10;
 	static const wxString & ERROR_TITLE;
-	static const wxString & COMMON_READ_ERROR, & COMMON_WRITE_ERROR;
+	static const wxString & COMMON_READ_ERROR, & COMMON_WRITE_ERROR, & INVALID_SIGNATURE_ERROR;
 	static const int COMMON_NUM_FIELD_WIDTH = 55;
 	static const int SMALL_SQUARE_BUTTON_SIZE = 30;
 	static const int MAX_UNDO_RECORDS = 100;

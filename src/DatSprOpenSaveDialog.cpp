@@ -60,7 +60,7 @@ DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
 	blkPath = new wxTextCtrl(panel, -1, blkPathStr);
 	blkButton = new wxButton(panel, ID_BROWSE_BLK_BUTTON, browse);
 	blkLabel->Enable(blockingStatesCheckboxValue);
-	blkLabel->Enable(blockingStatesCheckboxValue);
+	blkPath->Enable(blockingStatesCheckboxValue);
 	blkButton->Enable(blockingStatesCheckboxValue);
 
 	bool alphaCheckboxValue = (mode == MODE_OPEN ? settings.get("readAlpha")
@@ -258,6 +258,7 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 		wxPostEvent(m_parent, event);
 	};
 
+	auto & dsrw = DatSprReaderWriter::getInstance();
 	if (mode == MODE_OPEN)
 	{
 		settings.set("datOpenPath", datPathStr);
@@ -278,28 +279,48 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			settings.set("alpOpenPath", alpPathStr);
 		}
 		settings.save();
-		if (DatSprReaderWriter::getInstance().readDat(datPathStr, this))
+		if (dsrw.readDat(datPathStr, this))
 		{
 			currentProgressStage++;
-			if (DatSprReaderWriter::getInstance().readSpr(sprPathStr, this))
+			if (dsrw.readSpr(sprPathStr, this))
 			{
 				if (readOrSaveBlockingStates)
 				{
 					currentProgressStage++;
-					if (!DatSprReaderWriter::getInstance().readBlockingStates(blkPathStr, this))
+					if (!dsrw.readBlockingStates(blkPathStr, this))
 					{
-						wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".blk"), Config::ERROR_TITLE,
-						             wxOK | wxICON_ERROR);
+						switch (dsrw.getLastError())
+						{
+							case DatSprReaderWriter::ERROR_UNKNOWN:
+								wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".blk"), Config::ERROR_TITLE,
+								             wxOK | wxICON_ERROR);
+							break;
+							case DatSprReaderWriter::ERROR_INVALID_SIGNATURE:
+								wxMessageBox(wxString::Format(Config::INVALID_SIGNATURE_ERROR, ".blk",
+								             DatSprReaderWriter::DEFAULT_SPR_SIGNATURE), Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+							break;
+						}
+						progress->SetValue(0);
 					}
 				}
 
 				if (readOrSaveAlpha)
 				{
 					currentProgressStage++;
-					if (!DatSprReaderWriter::getInstance().readAlpha(alpPathStr, this))
+					if (!dsrw.readAlpha(alpPathStr, this))
 					{
-						wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".alp"), Config::ERROR_TITLE,
-						             wxOK | wxICON_ERROR);
+						switch (dsrw.getLastError())
+						{
+							case DatSprReaderWriter::ERROR_UNKNOWN:
+								wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".alp"), Config::ERROR_TITLE,
+								             wxOK | wxICON_ERROR);
+							break;
+							case DatSprReaderWriter::ERROR_INVALID_SIGNATURE:
+								wxMessageBox(wxString::Format(Config::INVALID_SIGNATURE_ERROR, ".alp",
+								             DatSprReaderWriter::DEFAULT_SPR_SIGNATURE), Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+							break;
+						}
+						progress->SetValue(0);
 					}
 				}
 
@@ -310,6 +331,7 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					{
 						wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".aoa"), Config::ERROR_TITLE,
 						             wxOK | wxICON_ERROR);
+						progress->SetValue(0);
 					}
 				}
 
@@ -317,14 +339,34 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			}
 			else
 			{
-				wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".spr"), Config::ERROR_TITLE,
-				             wxOK | wxICON_ERROR);
+				switch (dsrw.getLastError())
+				{
+					case DatSprReaderWriter::ERROR_UNKNOWN:
+						wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".spr"), Config::ERROR_TITLE,
+						             wxOK | wxICON_ERROR);
+					break;
+					case DatSprReaderWriter::ERROR_INVALID_SIGNATURE:
+						wxMessageBox(wxString::Format(Config::INVALID_SIGNATURE_ERROR, ".spr",
+						             DatSprReaderWriter::DEFAULT_SPR_SIGNATURE), Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+					break;
+				}
+				progress->SetValue(0);
 			}
 		}
 		else
 		{
-			wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".dat"), Config::ERROR_TITLE,
-			             wxOK | wxICON_ERROR);
+			switch (dsrw.getLastError())
+			{
+				case DatSprReaderWriter::ERROR_UNKNOWN:
+					wxMessageBox(wxString::Format(Config::COMMON_READ_ERROR, ".dat"), Config::ERROR_TITLE,
+					             wxOK | wxICON_ERROR);
+				break;
+				case DatSprReaderWriter::ERROR_INVALID_SIGNATURE:
+					wxMessageBox(wxString::Format(Config::INVALID_SIGNATURE_ERROR, ".dat",
+					             DatSprReaderWriter::DEFAULT_DAT_SIGNATURE), Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+				break;
+			}
+			progress->SetValue(0);
 		}
 	}
 	else if (mode == MODE_SAVE)
@@ -347,28 +389,30 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			settings.set("alpSavePath", alpPathStr);
 		}
 		settings.save();
-		if (DatSprReaderWriter::getInstance().writeDat(datPathStr, this))
+		if (dsrw.writeDat(datPathStr, this))
 		{
 			currentProgressStage++;
-			if (DatSprReaderWriter::getInstance().writeSpr(sprPathStr, this))
+			if (dsrw.writeSpr(sprPathStr, this))
 			{
 				if (readOrSaveBlockingStates)
 				{
 					currentProgressStage++;
-					if (!DatSprReaderWriter::getInstance().writeBlockingStates(blkPathStr, this))
+					if (!dsrw.writeBlockingStates(blkPathStr, this))
 					{
 						wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".blk"), Config::ERROR_TITLE,
 												 wxOK | wxICON_ERROR);
+						progress->SetValue(0);
 					}
 				}
 
 				if (readOrSaveAlpha)
 				{
 					currentProgressStage++;
-					if (!DatSprReaderWriter::getInstance().writeAlpha(alpPathStr, this))
+					if (!dsrw.writeAlpha(alpPathStr, this))
 					{
 						wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".alp"), Config::ERROR_TITLE,
 						             wxOK | wxICON_ERROR);
+						progress->SetValue(0);
 					}
 				}
 
@@ -379,6 +423,7 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 					{
 						wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".aoa"), Config::ERROR_TITLE,
 						             wxOK | wxICON_ERROR);
+						progress->SetValue(0);
 					}
 				}
 
@@ -388,12 +433,14 @@ void DatSprOpenSaveDialog::OnClickOpenSaveButton(wxCommandEvent & event)
 			{
 				wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".spr"), Config::ERROR_TITLE,
 				             wxOK | wxICON_ERROR);
+				progress->SetValue(0);
 			}
 		}
 		else
 		{
 			wxMessageBox(wxString::Format(Config::COMMON_WRITE_ERROR, ".dat"), Config::ERROR_TITLE,
 			             wxOK | wxICON_ERROR);
+			progress->SetValue(0);
 		}
 	}
 }
