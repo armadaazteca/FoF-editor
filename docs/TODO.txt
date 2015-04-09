@@ -1,5 +1,5 @@
-For v1.0:
-- settings for animation background color and excluding first frame
+Optional features:
+- go to object by ID
 
 Minor bugs:
 - get rid of all memory leaks (detected in VS, particularly with JSON stuff)

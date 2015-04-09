@@ -2680,6 +2680,29 @@ void MainWindow::OnExportAnimationMenu(wxCommandEvent & event)
 		settings.set("spriteExportDir", filename.GetPath());
 		settings.save();
 
+		// TODO: testing
+		/*try
+		{
+			vector <Image> frames;
+			Image img1("100x100", "white");
+			img1.pixelColor(49, 49, "red");
+			frames.push_back(img1);
+
+			Image img2("100x100", "red");
+			img2.pixelColor(49, 49, "white");
+			frames.push_back(img2);
+
+			img1.animationDelay(2000);
+			img2.animationDelay(2000);
+
+			Magick::writeImages(frames.begin(), frames.end(), (const char *) path.c_str());
+		}
+		catch (Exception & ex)
+		{
+			wxMessageBox(wxString::Format("Animation export failed, error occured:\n%s", ex.what()),
+			             Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+		}*/
+
 		ExportAnimationDialog exportAnimationDialog(this, 0, selectedObject->phasesCount - 1);
 		if (exportAnimationDialog.ShowModal() != wxID_OK) return;
 
@@ -2712,7 +2735,8 @@ void MainWindow::OnExportAnimationMenu(wxCommandEvent & event)
 		}
 		catch (Exception & ex)
 		{
-			wxMessageBox("Animation export failed, error occured", Config::ERROR_TITLE, wxOK | wxICON_ERROR);
+			wxMessageBox(wxString::Format("Animation export failed, error occured:\n%s", ex.what()),
+			             Config::ERROR_TITLE, wxOK | wxICON_ERROR);
 		}
 
 		currentFrame = lastCurrentFrame;

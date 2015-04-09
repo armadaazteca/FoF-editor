@@ -10,7 +10,7 @@
 #include "AutoBackupDialog.h"
 
 wxBEGIN_EVENT_TABLE(AutoBackupDialog, wxDialog)
-	EVT_TIMER(ID_RUN_TIMER, AutoBackupDialog::run)
+	EVT_ACTIVATE(AutoBackupDialog::run)
 wxEND_EVENT_TABLE()
 
 AutoBackupDialog::AutoBackupDialog(wxWindow * parent)
@@ -21,7 +21,7 @@ AutoBackupDialog::AutoBackupDialog(wxWindow * parent)
 
 	progress = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(200, -1));
 	auto cancelButton = new wxButton(this, wxID_CANCEL);
-	hbox->Add(progress, 0, wxRIGHT, 5);
+	hbox->Add(progress, 0, wxRIGHT | wxALIGN_CENTER, 5);
 	hbox->Add(cancelButton);
 
 	vbox->Add(hbox, 0, wxALL, 10);
@@ -29,13 +29,12 @@ AutoBackupDialog::AutoBackupDialog(wxWindow * parent)
 	SetSizer(vbox);
 	Fit();
 	Center();
-
-	timer = unique_ptr <wxTimer> (new wxTimer(this, ID_RUN_TIMER));
-	timer->StartOnce();
 }
 
-void AutoBackupDialog::run(wxTimerEvent & event)
+void AutoBackupDialog::run(wxActivateEvent & event)
 {
+	if (isRunning) return;
+
 	auto & dsrw = DatSprReaderWriter::getInstance();
 	bool hasObjects = false;
 	for (int cat = CategoryItem; cat < InvalidCategory; ++cat)

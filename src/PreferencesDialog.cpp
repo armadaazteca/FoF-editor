@@ -24,8 +24,8 @@ PreferencesDialog::PreferencesDialog(wxWindow * parent)
 	bool validateSignaturesCheckboxValue = settings.get("validateSignatures").IsSameAs("yes");
 	validateSignaturesCheckbox = new wxCheckBox(this, ID_VALIDATE_SIGNATURES_CHECKBOX, wxT("Validate signatures"));
 	validateSignaturesCheckbox->SetValue(validateSignaturesCheckboxValue);
-	const wchar_t * hint = wxT("When signatures validation is turned on, all loaded files are validated to have signature "
-	                    "corresponding to Tibia 9.60 format");
+	const wchar_t * hint = wxT("When signatures validation is turned on, all loaded files are validated to have signature ")
+	                       wxT("corresponding to Tibia 9.60 format");
 	auto validateSignaturesHint = new wxStaticText(this, wxID_ANY, hint, wxDefaultPosition, wxSize(300, 50));
 	validateSignaturesHint->SetFont(validateSignaturesHint->GetFont().Italic());
 

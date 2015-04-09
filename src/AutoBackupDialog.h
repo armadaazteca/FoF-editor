@@ -16,11 +16,12 @@ public:
 	wxDECLARE_EVENT_TABLE();
 
 private:
-	void run(wxTimerEvent & event);
+	void run(wxActivateEvent & event);
 
 	wxGauge * progress = nullptr;
 	unique_ptr <wxTimer> timer = nullptr;
 
+	bool isRunning = false;
 	int progressStages = 0, currentProgressStage = 0;
 	float percentsPerStage = 0;
 };
