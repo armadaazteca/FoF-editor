@@ -1,7 +1,6 @@
 #!/usr/bin/sh
-
 mkdir -p bin/debug
 mkdir -p bin/release
 mkdir -p obj/debug
-mkdir -p bin/release
+mkdir -p obj/release
 mkdir cmake

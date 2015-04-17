@@ -1,9 +1,12 @@
+ifndef CONF
+CONF=release
+endif
 CC=g++
 FLAGS=-std=c++11 `wx-config --cppflags` `Magick++-config --cppflags --cxxflags`
 FLAGS_debug=-g -O0 -Wall $(FLAGS)
 FLAGS_release=-O4 $(FLAGS)
 OBJECTS=obj/$(CONF)/NewEditor.o obj/$(CONF)/MainWindow.o obj/$(CONF)/DatSprOpenSaveDialog.o \
-        obj/$(CONF)/AdvancedAttributesDialog.o obj/$(CONF)/GenerateRMEDialog.o \
+        obj/$(CONF)/AdvancedAttributesDialog.o obj/$(CONF)/GenerateRMEDialog.o obj/$(CONF)/FindObjectDialog.o \
         obj/$(CONF)/SpritesCleanupDialog.o obj/$(CONF)/ExportAnimationDialog.o obj/$(CONF)/PreferencesDialog.o \
         obj/$(CONF)/AutoBackupDialog.o obj/$(CONF)/AboutDialog.o obj/$(CONF)/DatSprReaderWriter.o  \
         obj/$(CONF)/AdvancedAttributesManager.o obj/$(CONF)/ItemsOtbWriter.o obj/$(CONF)/XmlWriter.o \
@@ -45,6 +48,10 @@ obj/$(CONF)/SpritesCleanupDialog.o: src/SpritesCleanupDialog.cpp src/SpritesClea
 obj/$(CONF)/ExportAnimationDialog.o: src/ExportAnimationDialog.cpp src/ExportAnimationDialog.h \
                                  src/Config.h src/Settings.h
 	$(CC) $(FLAGS_$(CONF)) -c src/ExportAnimationDialog.cpp -o $@
+	
+obj/$(CONF)/FindObjectDialog.o: src/FindObjectDialog.cpp src/FindObjectDialog.h \
+                                src/Config.h
+	$(CC) $(FLAGS_$(CONF)) -c src/FindObjectDialog.cpp -o $@
 
 obj/$(CONF)/PreferencesDialog.o: src/PreferencesDialog.cpp src/PreferencesDialog.h \
                                  src/Events.h src/Interfaces.h

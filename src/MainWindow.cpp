@@ -21,6 +21,7 @@
 #include "GenerateRMEDialog.h"
 #include "SpritesCleanupDialog.h"
 #include "ExportAnimationDialog.h"
+#include "FindObjectDialog.h"
 #include "PreferencesDialog.h"
 #include "AutoBackupDialog.h"
 #include "QuickGuideDialog.h"
@@ -45,6 +46,7 @@ wxBEGIN_EVENT_TABLE(MainWindow, wxFrame)
 	EVT_MENU(wxID_EXIT, MainWindow::OnExit)
 	EVT_MENU(wxID_UNDO, MainWindow::OnUndo)
 	EVT_MENU(wxID_REDO, MainWindow::OnRedo)
+	EVT_MENU(wxID_FIND, MainWindow::OnFindObjectDialog)
 	EVT_MENU(wxID_PREFERENCES, MainWindow::OnPreferencesDialog)
 	EVT_MENU(ID_MENU_EDIT_ADVANCED_ATTRS, MainWindow::OnAdvancedAttributesDialog)
 	EVT_MENU(ID_MENU_GENERATE_RME, MainWindow::OnGenerateRMEDialog)
@@ -130,6 +132,9 @@ MainWindow::MainWindow(const wxString & title, const wxPoint & pos, const wxSize
 	menuEdit->Append(wxID_REDO, "Redo\tCtrl+Y");
 	menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
 	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	menuEdit->AppendSeparator();
+	menuEdit->Append(wxID_FIND);
+	menuEdit->FindChildItem(wxID_FIND)->Enable(false);
 	menuEdit->AppendSeparator();
 	menuEdit->Append(wxID_PREFERENCES);
 	menuTools = new wxMenu();
@@ -735,6 +740,7 @@ void MainWindow::OnCreateNewFiles(wxCommandEvent & event)
 	redoStack = stack <OperationInfo> (); // stacks
 	menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
 	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	menuEdit->FindChildItem(wxID_FIND)->Enable(true);
 
 	DatSprReaderWriter::getInstance().initNewData();
 	mainPanel->Enable();
@@ -801,6 +807,7 @@ void MainWindow::OnDatSprLoaded(wxCommandEvent & event)
 	redoStack = stack <OperationInfo> (); // stacks
 	menuEdit->FindChildItem(wxID_UNDO)->Enable(false);
 	menuEdit->FindChildItem(wxID_REDO)->Enable(false);
+	menuEdit->FindChildItem(wxID_FIND)->Enable(true);
 
 	statusBar->SetStatusText("Files have been loaded successfully");
 }
@@ -1846,6 +1853,8 @@ void MainWindow::OnFrameTimeChanged(wxFocusEvent & event)
 	opInfo.frameID = currentFrame;
 
 	isDirty = true;
+
+	event.Skip();
 }
 
 void MainWindow::OnPreviewFPSChanged(wxSpinEvent & event)
@@ -3727,6 +3736,26 @@ void MainWindow::OnRedo(wxCommandEvent & event)
 	else if (info.chainedRedo)
 	{
 		OnRedo(event);
+	}
+}
+
+void MainWindow::OnFindObjectDialog(wxCommandEvent & event)
+{
+	FindObjectDialog findObjectDialog(this);
+	findObjectDialog.ShowModal();
+	const wxString & objectID = findObjectDialog.getObjectID();
+	if (objectID.Length() > 0)
+	{
+		if (objectsListBox->SetStringSelection(objectID))
+		{
+			wxCommandEvent event;
+			event.SetString(objectID);
+			OnObjectSelected(event);
+		}
+		else
+		{
+			statusBar->SetStatusText(wxString::Format("Unable to find object with ID <%s> in the current category", objectID));
+		}
 	}
 }
 

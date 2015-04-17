@@ -9,7 +9,7 @@ public:
 	static const wxString & APP_NAME;
 	static const int MAJOR_VERSION = 0;
 	static const int MINOR_VERSION = 9;
-	static const int BUILD_VERSION = 9;
+	static const int BUILD_VERSION = 10;
 	static const wxString & VERSION_STRING;
 	static const int SPRITE_SIZE = 32;
 	static const int MAIN_WINDOW_WIDTH = 1280;

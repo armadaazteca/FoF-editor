@@ -280,6 +280,7 @@ private:
 	void OnClose(wxCloseEvent & event);
 	void OnUndo(wxCommandEvent & event);
 	void OnRedo(wxCommandEvent & event);
+	void OnFindObjectDialog(wxCommandEvent & event);
 	void OnPreferencesDialog(wxCommandEvent & event);
 	void OnPreferencesSaved(wxCommandEvent & event);
 	void OnAdvancedAttributesDialog(wxCommandEvent & event);

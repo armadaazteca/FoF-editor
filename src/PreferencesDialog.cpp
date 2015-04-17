@@ -24,8 +24,8 @@ PreferencesDialog::PreferencesDialog(wxWindow * parent)
 	bool validateSignaturesCheckboxValue = settings.get("validateSignatures").IsSameAs("yes");
 	validateSignaturesCheckbox = new wxCheckBox(this, ID_VALIDATE_SIGNATURES_CHECKBOX, wxT("Validate signatures"));
 	validateSignaturesCheckbox->SetValue(validateSignaturesCheckboxValue);
-	const wchar_t * hint = wxT("When signatures validation is turned on, all loaded files are validated to have signature ")
-	                       wxT("corresponding to Tibia 9.60 format");
+	const wchar_t * hint = wxT("When signatures validation is turned on, all loaded files are checked to have proper signature")
+	                       wxT("in the beginning of the file.");
 	auto validateSignaturesHint = new wxStaticText(this, wxID_ANY, hint, wxDefaultPosition, wxSize(300, 50));
 	validateSignaturesHint->SetFont(validateSignaturesHint->GetFont().Italic());
 
@@ -45,8 +45,9 @@ PreferencesDialog::PreferencesDialog(wxWindow * parent)
 		backupIntervalMinutesLabel->Disable();
 	}
 
-	auto cancelButton = new wxButton(this, wxID_CANCEL);
-	auto saveButton = new wxButton(this, wxID_SAVE);
+	auto cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+	auto saveButton = new wxButton(this, wxID_SAVE, "Save");
+	saveButton->SetDefault();
 	saveButton->SetFocus();
 
 	int currentRow = 0;

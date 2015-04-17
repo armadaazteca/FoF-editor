@@ -49,7 +49,16 @@ bool XmlWriter::writeItemsXML(shared_ptr <DatObjectList> items, const wxString &
 				{
 					xml_node attrNode = itemNode.append_child("attribute");
 					attrNode.append_attribute("key") = "floorchange";
-					attrNode.append_attribute("value") = (attrs->floorChange == FLOOR_CHANGE_DOWN ? "down" : "up");
+					string floorChangeValue;
+					switch (attrs->floorChange)
+					{
+						case FLOOR_CHANGE_DOWN: floorChangeValue = "down"; break;
+						case FLOOR_CHANGE_NORTH: floorChangeValue = "north"; break;
+						case FLOOR_CHANGE_SOUTH: floorChangeValue = "south"; break;
+						case FLOOR_CHANGE_WEST: floorChangeValue = "west"; break;
+						case FLOOR_CHANGE_EAST: floorChangeValue = "east"; break;
+					}
+					attrNode.append_attribute("value") = floorChangeValue.c_str();
 				}
 				if (item->blocksProjectiles)
 				{

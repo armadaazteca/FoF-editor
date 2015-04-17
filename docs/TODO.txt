@@ -1,3 +1,7 @@
+Current:
+- for advanced attributes make 'floor change' to have 'north', 'south' etc. values
+- think about adding 'always on top' / 'always on bottom' attributes
+
 Optional features:
 - go to object by ID
 

@@ -13,6 +13,10 @@ const wxString AdvancedAttributesDialog::GROUPS[] = {
 	"Magic Field", "Writeable", "Key", "Splash", "Fluid", "Door", "Deprecated"
 };
 
+const wxString AdvancedAttributesDialog::FLOOR_CHANGE[] = {
+	"None", "Down", "North", "South", "West", "East"
+};
+
 wxBEGIN_EVENT_TABLE(AdvancedAttributesDialog, wxDialog)
 	EVT_BUTTON(wxID_SAVE, AdvancedAttributesDialog::OnClickSaveButton)
 	EVT_BUTTON(ID_BUTTON_ERASE, AdvancedAttributesDialog::OnClickEraseButton)
@@ -82,17 +86,16 @@ AdvancedAttributesDialog::AdvancedAttributesDialog(wxWindow * parent, DatObjectC
 
 		auto floorChangeLabel = new wxStaticText(this, wxID_ANY, "Floor change:");
 		gbs->Add(floorChangeLabel, wxGBPosition(currentRow, 0), wxDefaultSpan, wxALIGN_CENTER_VERTICAL);
-		hbox = new wxBoxSizer(wxHORIZONTAL);
-		floorChangeNoneRb = new wxRadioButton(this, wxID_ANY, "none", wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-		floorChangeNoneRb->SetValue(attributes == nullptr || (attributes != nullptr && attributes->floorChange == FLOOR_CHANGE_NONE));
-		hbox->Add(floorChangeNoneRb);
-		floorChangeDownRb = new wxRadioButton(this, wxID_ANY, "down");
-		floorChangeDownRb->SetValue(attributes != nullptr && attributes->floorChange == FLOOR_CHANGE_DOWN);
-		hbox->Add(floorChangeDownRb, 0, wxLEFT | wxRIGHT | wxALIGN_CENTER_VERTICAL, 5);
-		floorChangeUpRb = new wxRadioButton(this, wxID_ANY, "up");
-		floorChangeUpRb->SetValue(attributes != nullptr && attributes->floorChange == FLOOR_CHANGE_UP);
-		hbox->Add(floorChangeUpRb);
-		gbs->Add(hbox, wxGBPosition(currentRow, 1), wxDefaultSpan, wxALIGN_CENTER_VERTICAL);
+
+		floorChangeCombo = new wxComboBox(this, wxID_ANY, FLOOR_CHANGE[0], wxDefaultPosition, wxDefaultSize,
+		                                  FLOOR_CHANGE_LAST, FLOOR_CHANGE, wxCB_READONLY);
+		unsigned int floorChange = FLOOR_CHANGE_NONE;
+		if (attributes)
+		{
+			floorChange = attributes->floorChange;
+		}
+		floorChangeCombo->SetSelection(floorChange);
+		gbs->Add(floorChangeCombo, wxGBPosition(currentRow, 1), wxDefaultSpan, wxALIGN_CENTER_VERTICAL);
 		currentRow++;
 	}
 
@@ -112,9 +115,10 @@ AdvancedAttributesDialog::AdvancedAttributesDialog(wxWindow * parent, DatObjectC
 	}
 
 	auto hbox = new wxBoxSizer(wxHORIZONTAL);
-	auto okButton = new wxButton(this, wxID_SAVE);
-	okButton->SetFocus();
-	hbox->Add(okButton);
+	auto saveButton = new wxButton(this, wxID_SAVE, "Save");
+	saveButton->SetDefault();
+	saveButton->SetFocus();
+	hbox->Add(saveButton);
 	if (attributes)
 	{
 		auto eraseButton = new wxButton(this, ID_BUTTON_ERASE, "Erase...");
@@ -158,9 +162,7 @@ void AdvancedAttributesDialog::OnClickSaveButton(wxCommandEvent & event)
 		if (articleARb->GetValue()) attrs->article = ARTICLE_A;
 		if (articleAnRb->GetValue()) attrs->article = ARTICLE_AN;
 
-		if (floorChangeNoneRb->GetValue()) attrs->floorChange = FLOOR_CHANGE_NONE;
-		if (floorChangeDownRb->GetValue()) attrs->floorChange = FLOOR_CHANGE_DOWN;
-		if (floorChangeUpRb->GetValue()) attrs->floorChange = FLOOR_CHANGE_UP;
+		attrs->floorChange = floorChangeCombo->GetSelection();
 	}
 	else if (objCat == CategoryCreature)
 	{

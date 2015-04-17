@@ -56,6 +56,7 @@ ExportAnimationDialog::ExportAnimationDialog(wxWindow * parent, unsigned int sta
 	auto cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
 	buttonsSizer->Add(cancelButton, 0, wxALL, 5);
 	auto exportButton = new wxButton(this, wxID_OK, "Export");
+	exportButton->SetDefault();
 	exportButton->SetFocus();
 	buttonsSizer->Add(exportButton, 0, wxALL, 5);
 

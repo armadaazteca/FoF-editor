@@ -25,6 +25,7 @@ SpritesCleanupDialog::SpritesCleanupDialog(wxWindow * parent)
 	progress = new wxGauge(this, -1, 100);
 	hbox->Add(progress, 9, wxALL | wxALIGN_CENTER | wxEXPAND, 5);
 	auto runButton = new wxButton(this, ID_RUN_BUTTON, "Run");
+	runButton->SetDefault();
 	runButton->SetFocus();
 	hbox->Add(runButton, 1, wxTOP | wxBOTTOM | wxALIGN_CENTER | wxEXPAND, 5);
 	vbox->Add(hbox);

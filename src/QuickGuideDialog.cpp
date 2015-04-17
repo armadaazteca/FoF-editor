@@ -10,7 +10,7 @@ QuickGuideDialog::QuickGuideDialog(wxWindow * parent) : wxDialog(parent, wxID_AN
 	auto vbox = new wxBoxSizer(wxVERTICAL);
 
   const char * guideText = "QUICK GUIDE - OVERVIEW OF EDITOR FUNCTIONALITY\n"
-	                         "===============================================\n\n"
+	                         "==============================================\n\n"
 	                         "To create new files from scratch, use \"File -> New\" menu or Ctrl+N hotkey.\n\n"
 	                         "To open existing files, use \"File -> Open\" menu or Ctrl+O hotkey.\n\n"
 	                         "To save files, use \"File -> Save\" menu or Ctrl+S hotkey.\n\n"
@@ -20,7 +20,9 @@ QuickGuideDialog::QuickGuideDialog(wxWindow * parent) : wxDialog(parent, wxID_AN
 													 "(described below) you also must check corresponding checkbox and provide path to .aoa file.\n\n"
 	                         "After new files have been created or existing have been loaded, "
 	                         "you can switch objects category using dropdown in the top-left corner. "
-	                         "Then you can select existing object in the listbox under the dropdown.\n\n"
+	                         "Then you can select existing object in the listbox under the dropdown.\n"
+	                         "In case if there are large number of objects in the list, you can quickly jump to the object by its ID "
+													 "using \"Edit -> Find\" menu or pressing Ctrl+F hotkey and entering object ID in the popup dialog.\n\n"
 	                         "To create new object in the current category, press \"New object\" button "
 	                         "in the bottom-left corner.\n\n"
 	                         "If existing object is selected and it has some sprites, they will be displayed on the right side in the "

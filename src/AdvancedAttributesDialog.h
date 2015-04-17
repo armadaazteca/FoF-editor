@@ -9,7 +9,7 @@ class AdvancedAttributesDialog : public wxDialog
 public:
 	enum ControlIDs { ID_BUTTON_ERASE };
 
-	static const wxString GROUPS[];
+	static const wxString GROUPS[], FLOOR_CHANGE[];
 
 	AdvancedAttributesDialog(wxWindow * parent, DatObjectCategory objectCategory, unsigned int objectID);
 	inline virtual ~AdvancedAttributesDialog() {}
@@ -22,10 +22,9 @@ private:
 	DatObjectCategory objCat = CategoryItem;
 	unsigned int objID = 0;
 
-	wxComboBox * groupCombo = nullptr;
+	wxComboBox * groupCombo = nullptr, * floorChangeCombo = nullptr;
 	wxTextCtrl * nameText = nullptr, * descriptionText = nullptr;
 	wxRadioButton * articleARb = nullptr, * articleAnRb = nullptr;
-	wxRadioButton * floorChangeNoneRb = nullptr, * floorChangeDownRb = nullptr, * floorChangeUpRb = nullptr;
 	wxRadioButton * typeMonsterRb = nullptr, * typeNPCRb = nullptr;
 };
 

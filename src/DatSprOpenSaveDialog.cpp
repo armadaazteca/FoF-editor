@@ -14,6 +14,7 @@
 wxBEGIN_EVENT_TABLE(DatSprOpenSaveDialog, wxDialog)
 	EVT_BUTTON(ID_BROWSE_DAT_BUTTON, DatSprOpenSaveDialog::OnClickBrowseButton)
 	EVT_BUTTON(ID_BROWSE_SPR_BUTTON, DatSprOpenSaveDialog::OnClickBrowseButton)
+	EVT_BUTTON(ID_BROWSE_BLK_BUTTON, DatSprOpenSaveDialog::OnClickBrowseButton)
 	EVT_BUTTON(ID_BROWSE_ALP_BUTTON, DatSprOpenSaveDialog::OnClickBrowseButton)
 	EVT_BUTTON(ID_BROWSE_AOA_BUTTON, DatSprOpenSaveDialog::OnClickBrowseButton)
 	EVT_BUTTON(wxID_OPEN, DatSprOpenSaveDialog::OnClickOpenSaveButton)
@@ -23,7 +24,7 @@ wxBEGIN_EVENT_TABLE(DatSprOpenSaveDialog, wxDialog)
 	EVT_CHECKBOX(ID_READ_SAVE_ATTRS_CHECKBOX, DatSprOpenSaveDialog::OnChangeReadSaveAttrsCheckbox)
 wxEND_EVENT_TABLE()
 
-const wxString DatSprOpenSaveDialog::DEFAULT_FILENAME = "Tibia";
+const wxString DatSprOpenSaveDialog::DEFAULT_FILENAME = "fof";
 
 DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
 	: wxDialog(parent, -1, wxString::Format("%s .dat / .spr / .alp / .aoa files", mode == MODE_OPEN ? "Open" : "Save"))
@@ -93,6 +94,7 @@ DatSprOpenSaveDialog::DatSprOpenSaveDialog(wxWindow * parent, unsigned int mode)
 
 	progress = new wxGauge(panel, -1, 100);
 	auto openSaveButton = (mode == MODE_OPEN ? new wxButton(panel, wxID_OPEN, "Open") : new wxButton(panel, wxID_SAVE, "Save"));
+	openSaveButton->SetDefault();
 	openSaveButton->SetFocus();
 
 	int currentRow = 0;

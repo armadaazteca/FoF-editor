@@ -47,6 +47,7 @@ GenerateRMEDialog::GenerateRMEDialog(wxWindow * parent) : wxDialog(parent, -1, "
 	vbox->Add(progress, 1, wxALL | wxEXPAND, 5);
 
 	auto generateButton = new wxButton(this, ID_GENERATE_BUTTON, wxT("Generate"));
+	generateButton->SetDefault();
 	generateButton->SetFocus();
 	vbox->Add(generateButton, 0, wxALL | wxALIGN_RIGHT, 5);
 

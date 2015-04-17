@@ -70,7 +70,7 @@ AdvancedAttributesManager::makeAttrsCopy(shared_ptr <AdvancedObjectAttributes> a
 	}
 
 	copy->article = attrs->article;
-	copy->floorChange = attrs->creatureType;
+	copy->floorChange = attrs->floorChange;
 	copy->creatureType = attrs->creatureType;
 
 	return copy;
